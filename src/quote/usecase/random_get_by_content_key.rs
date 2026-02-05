@@ -1,6 +1,5 @@
 use crate::app::AppError;
-use crate::PgJson;
-use crate::quote::{Quote, QuotePort, QuoteQuery};
+use crate::quote::{Quote, QuotePort, QuoteQuery, QuoteQueryFilter};
 
 pub struct RandomGetQuoteByContentKey<'a> {
     port: &'a dyn QuotePort,
@@ -11,11 +10,14 @@ impl<'a> RandomGetQuoteByContentKey<'a> {
         Self { port }
     }
 
-    pub async fn execute(&self) -> Result<Quote, AppError> {
+    pub async fn execute(&self, langs: Vec<String>) -> Result<Quote, AppError> {
+        let filter = QuoteQueryFilter::AllLangs(langs);
+
         let query = QuoteQuery::builder()
+            .filter(filter)
             .build();
         self.port
-            .random_find_by_content_key(query)
+            .random_get_by_content_key(query)
             .await
             .map_err(|_| AppError::QuoteNotFound)
     }

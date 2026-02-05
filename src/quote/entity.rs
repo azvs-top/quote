@@ -32,8 +32,7 @@ impl Quote {
 #[derive(Default, Debug, Clone)]
 pub struct QuoteQuery {
     id: Option<i64>,
-    content: Option<Value>,
-    cond: Option<PgJson>,
+    filter: Option<QuoteQueryFilter>,
     active: Option<bool>,
     limit: Option<i64>,
     offset: Option<i64>,
@@ -47,12 +46,8 @@ impl QuoteQuery {
         self.id
     }
 
-    pub fn content(&self) -> Option<&Value> {
-        self.content.as_ref()
-    }
-
-    pub fn cond(self) -> Option<PgJson> {
-        self.cond
+    pub fn filter(&self) -> Option<&QuoteQueryFilter> {
+        self.filter.as_ref()
     }
 
     pub fn active(&self) -> Option<bool> {
@@ -82,13 +77,8 @@ impl QuoteQueryBuilder {
         self
     }
 
-    pub fn content(mut self, content: Value) -> Self {
-        self.inner.content = Some(content);
-        self
-    }
-
-    pub fn cond(mut self, cond: PgJson) -> Self {
-        self.inner.cond = Some(cond);
+    pub fn filter(mut self, filter: QuoteQueryFilter) -> Self {
+        self.inner.filter = Some(filter);
         self
     }
 
@@ -105,4 +95,13 @@ impl QuoteQueryBuilder {
     pub fn build(self) -> QuoteQuery {
         self.inner
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum QuoteQueryFilter {
+    /// quote.content.inline 同时存在这些语言
+    AllLangs(Vec<String>),
+
+    /// quote.content.inline 存在任意一个语言
+    AnyLang(Vec<String>),
 }

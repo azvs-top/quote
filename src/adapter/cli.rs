@@ -1,5 +1,5 @@
 use crate::app::AppState;
-use crate::quote::GetQuoteById;
+use crate::quote::{GetQuoteById, RandomGetQuoteByContentKey};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -24,7 +24,7 @@ struct GetQuoteArgs {
     pub limit: Option<usize>,
 }
 
-pub async fn run_cli(state: AppState) -> anyhow::Result<()> {
+pub async fn run(state: AppState) -> anyhow::Result<()> {
     let cli = Cli::parse();
     match &cli.command {
         Commands::Get(GetQuoteArgs { id, page, limit }) => {
@@ -37,7 +37,10 @@ pub async fn run_cli(state: AppState) -> anyhow::Result<()> {
                     println!("{:#?}", quote);
                 }
                 None => {
-                    todo!()
+                    let quote = RandomGetQuoteByContentKey::new(state.quote_port.as_ref())
+                        .execute(state.config.quote.default_langs.clone())
+                        .await?;
+                    println!("{:#?}", quote);
                 }
             }
         }
