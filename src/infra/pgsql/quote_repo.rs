@@ -69,42 +69,6 @@ impl QuotePort for QuoteRepoPgsql {
         Ok(quote)
     }
 
-    async fn get_by_id(&self, query: QuoteQuery) -> Result<Quote, AppError> {
-        let id = query.id().ok_or(AppError::QuoteNotFound)?;
-        let quote = sqlx::query_as::<_, Quote>(
-            r#"
-            SELECT id, content, active, remark
-            FROM quote.quote
-            WHERE id = $1 AND active = true
-            "#,
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or(AppError::QuoteNotFound)?;
-
-        Ok(quote)
-    }
-
-    async fn random_get_by_content_key(&self, query: QuoteQuery) -> Result<Quote, AppError> {
-        let mut sql = QueryBuilder::<Postgres>::new(
-            "SELECT id, content, active, remark FROM quote.quote WHERE active = true",
-        );
-        if let Some(filter) = query.filter() {
-            sql.push(" AND ");
-            self.apply_filter(filter, &mut sql)?;
-        }
-        sql.push(" ORDER BY random() LIMIT 1");
-
-        let result = sql
-            .build_query_as::<Quote>()
-            .fetch_optional(&self.pool)
-            .await?
-            .ok_or(AppError::QuoteNotFound)?;
-
-        Ok(result)
-    }
-
     async fn list(&self, query: QuoteQuery) -> Result<Vec<Quote>, AppError> {
         let mut sql = QueryBuilder::<Postgres>::new(
             "SELECT id, content, active, remark FROM quote.quote WHERE 1=1"

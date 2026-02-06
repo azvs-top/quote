@@ -1,5 +1,5 @@
 use crate::app::AppState;
-use crate::quote::{GetQuoteById, RandomGetQuoteByContentKey};
+use crate::quote::{GetQuoteById, GetQuoteRandom};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -37,7 +37,7 @@ pub async fn run(state: AppState) -> anyhow::Result<()> {
                     println!("{:#?}", quote);
                 }
                 None => {
-                    let quote = RandomGetQuoteByContentKey::new(state.quote_port.as_ref())
+                    let quote = GetQuoteRandom::new(state.quote_port.as_ref())
                         .execute(state.config.quote.default_langs.clone())
                         .await?;
                     println!("{:#?}", quote);

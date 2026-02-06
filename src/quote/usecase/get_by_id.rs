@@ -14,7 +14,7 @@ impl<'a> GetQuoteById<'a> {
             .id(id)
             .build();
         self.port
-            .get_by_id(query)
+            .get(query)
             .await
             .map_err(|_| AppError::QuoteNotFound)
     }
@@ -29,7 +29,7 @@ mod tests {
     #[tokio::test]
     async fn get_quote_by_id_success() {
         let mut mock = MockQuotePort::new();
-        mock.expect_get_by_id()
+        mock.expect_get()
             .returning(|_| {
                 Ok(Quote {
                     id: 1,
@@ -47,7 +47,7 @@ mod tests {
     #[tokio::test]
     async fn get_quote_by_id_failure() {
         let mut mock = MockQuotePort::new();
-        mock.expect_get_by_id()
+        mock.expect_get()
             .returning(|_| Err(AppError::QuoteNotFound));
 
         let err = GetQuoteById::new(&mock).execute(1).await.unwrap_err();

@@ -1,11 +1,11 @@
 use crate::app::AppError;
 use crate::quote::{Quote, QuotePort, QuoteQuery, QuoteQueryFilter};
 
-pub struct RandomGetQuoteByContentKey<'a> {
+pub struct GetQuoteRandom<'a> {
     port: &'a dyn QuotePort,
 }
 
-impl<'a> RandomGetQuoteByContentKey<'a> {
+impl<'a> GetQuoteRandom<'a> {
     pub fn new(port: &'a dyn QuotePort) -> Self {
         Self { port }
     }
@@ -17,7 +17,7 @@ impl<'a> RandomGetQuoteByContentKey<'a> {
             .filter(filter)
             .build();
         self.port
-            .random_get_by_content_key(query)
+            .get(query)
             .await
             .map_err(|_| AppError::QuoteNotFound)
     }
