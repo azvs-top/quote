@@ -1,16 +1,22 @@
 use crate::app::app_error::AppError;
+use crate::infra::{QuoteRepoFile, QuoteRepoPgsql};
 use crate::quote::QuotePort;
+use aws_sdk_s3::Client as S3Client;
 use config::{Config, Environment, File};
 use directories::BaseDirs;
 use serde::Deserialize;
-use std::sync::Arc;
 use sqlx::postgres::PgPoolOptions;
-use crate::infra::{QuoteRepoFile, QuoteRepoPgsql};
+use std::sync::Arc;
+use aws_config::{BehaviorVersion, Region};
+use aws_sdk_s3::config::Credentials;
 
 #[derive(Clone)]
 pub struct AppState {
     pub quote_port: Arc<dyn QuotePort + Send + Sync>,
+
     pub config: Arc<AppConfig>,
+
+    pub s3: Option<Arc<S3Client>>,
 }
 
 impl AppState {
@@ -18,8 +24,7 @@ impl AppState {
         // 加载配置文件并校验语义
         let config = AppConfig::load().await?;
 
-        let quote_port: Arc<dyn QuotePort + Send + Sync> =
-        match config.storage.backend {
+        let quote_port: Arc<dyn QuotePort + Send + Sync> = match config.storage.backend {
             StorageBackend::Pgsql => {
                 let pgsql = config.storage.pgsql.as_ref().unwrap();
                 let pool = PgPoolOptions::new()
@@ -36,8 +41,27 @@ impl AppState {
             }
         };
 
+        let s3 = if let Some(minio) = &config.minio {
+            let conf = aws_config::defaults(BehaviorVersion::latest())
+                .endpoint_url(&minio.endpoint)
+                .credentials_provider(Credentials::new(
+                    &minio.access_key,
+                    &minio.secret_key,
+                    None,
+                    None,
+                    "minio"
+                )).region(Region::new(minio.region.clone()))
+                .load()
+                .await;
+            Some(Arc::new(S3Client::new(&conf)))
+        } else {
+            None
+        };
+
         Ok(Self {
-            quote_port, config: Arc::new(config),
+            quote_port,
+            config: Arc::new(config),
+            s3
         })
     }
 }
@@ -45,6 +69,7 @@ impl AppState {
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
     pub storage: StorageConfig,
+    pub minio: Option<MinioConfig>,
     pub quote: QuoteConfig,
 }
 
@@ -118,6 +143,22 @@ pub struct PgsqlConfig {
 #[derive(Debug, Deserialize)]
 pub struct FileConfig {
     pub path: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct MinioConfig {
+    pub endpoint: String,
+    pub access_key: String,
+    pub secret_key: String,
+    pub bucket: String,
+    #[serde(default = "default_region")]
+    pub region: String,
+    #[serde(default)]
+    pub secure: bool,
+}
+
+fn default_region() -> String {
+    "us-east-1".to_string()
 }
 
 #[derive(Debug, Deserialize)]

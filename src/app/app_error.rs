@@ -24,6 +24,9 @@ pub enum AppError {
 
     #[error("Invalid JSON path segment: {0}")]
     InvalidJsonPath(String),
+
+    #[error("Invalid Filter: {0}")]
+    InvalidFilter(String),
     
     
     // ##### Quote ##### //

@@ -1,9 +1,9 @@
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::FromRow;
 use crate::app::app_error::AppError;
-use crate::PgJson;
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Quote {
     pub id: i64,
     pub content: Value,
@@ -26,6 +26,42 @@ impl Quote {
             active,
             remark,
         })
+    }
+
+    pub fn get_inline_texts_by_langs(&self, langs: &[String]) -> Result<Vec<String>, AppError> {
+        let mut texts = Vec::new();
+
+        match &self.content {
+            Value::Object(content_obj) => {
+                match content_obj.get("inline") {
+                    Some(Value::Object(inline_obj)) => {
+                        for lang in langs {
+                            match inline_obj.get(lang) {
+                                Some(Value::String(text)) => {
+                                    texts.push(text.to_string());
+                                }
+                                Some(_) => {
+                                    todo!("语言存在但不是字符串类型")
+                                }
+                                None => {
+                                    todo!("语言不存在")
+                                }
+                            }
+                        }
+                    }
+                    Some(_) => {
+                        todo!("inline存在但不是对象类型")
+                    }
+                    None => {
+                        todo!("inline不存在")
+                    }
+                }
+            }
+            _ => {
+                return Err(AppError::QuoteInvalidContent)
+            }
+        }
+        Ok(texts)
     }
 }
 
@@ -72,8 +108,19 @@ impl QuoteQueryBuilder {
         self.inner.id = Some(id);
         self
     }
+
+    pub fn with_id(mut self, id: Option<i64>) -> Self {
+        self.inner.id = id;
+        self
+    }
+
     pub fn active(mut self, active: bool) -> Self {
         self.inner.active = Some(active);
+        self
+    }
+
+    pub fn with_active(mut self, active: Option<bool>) -> Self {
+        self.inner.active = active;
         self
     }
 
@@ -82,13 +129,28 @@ impl QuoteQueryBuilder {
         self
     }
 
+    pub fn with_filter(mut self, filter: Option<QuoteQueryFilter>) -> Self {
+        self.inner.filter = filter;
+        self
+    }
+
     pub fn limit(mut self, limit: i64) -> Self {
         self.inner.limit = Some(limit);
         self
     }
 
+    pub fn with_limit(mut self, limit: Option<i64>) -> Self {
+        self.inner.limit = limit;
+        self
+    }
+
     pub fn offset(mut self, offset: i64) -> Self {
         self.inner.offset = Some(offset);
+        self
+    }
+
+    pub fn with_offset(mut self, offset: Option<i64>) -> Self {
+        self.inner.offset = offset;
         self
     }
 
@@ -99,9 +161,29 @@ impl QuoteQueryBuilder {
 
 #[derive(Debug, Clone)]
 pub enum QuoteQueryFilter {
+
+    // 组合
+    And(Vec<QuoteQueryFilter>),
+    Or(Vec<QuoteQueryFilter>),
+
+    // 内容能力
+    HasInline,
+    HasExternal,
+    HasMarkdown,
+    HasImage,
+    HasAudio,
+
     /// quote.content.inline 同时存在这些语言
-    AllLangs(Vec<String>),
+    HasInlineAllLang(Vec<String>),
 
     /// quote.content.inline 存在任意一个语言
-    AnyLang(Vec<String>),
+    HasInlineAnyLang(Vec<String>),
+
+    HasExternalAllLang(Vec<String>),
+
+    HasExternalAnyLang(Vec<String>),
+
+    HasMarkdownAllLang(Vec<String>),
+
+    HasMarkdownAnyLang(Vec<String>),
 }

@@ -10,15 +10,14 @@ impl<'a> GetQuoteRandom<'a> {
         Self { port }
     }
 
-    pub async fn execute(&self, langs: Vec<String>) -> Result<Quote, AppError> {
-        let filter = QuoteQueryFilter::AllLangs(langs);
-
-        let query = QuoteQuery::builder()
-            .filter(filter)
+    pub async fn execute(&self, query: QuoteQuery) -> Result<Quote, AppError> {
+        let new_query = QuoteQuery::builder()
+            .with_filter(query.filter().cloned())
+            .with_active(query.active())
             .build();
-        self.port
-            .get(query)
+        self.port.get(new_query)
             .await
             .map_err(|_| AppError::QuoteNotFound)
+
     }
 }

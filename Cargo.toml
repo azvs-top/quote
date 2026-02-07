@@ -39,3 +39,8 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "macros"] }
 
 # 命令行 CLI
 clap = { version = "4.5.57", features = ["derive"] }
+
+# AWS S3 SDK
+aws-config = "1.8.13"
+aws-sdk-s3 = "1.122.0"
+log = "0.4.29"
