@@ -1,5 +1,5 @@
 use crate::app::AppError;
-use crate::quote::{Quote, QuotePort, QuoteQuery, QuoteQueryFilter};
+use crate::quote::{Quote, QuotePort, QuoteQuery};
 
 pub struct GetQuoteRandom<'a> {
     port: &'a dyn QuotePort,

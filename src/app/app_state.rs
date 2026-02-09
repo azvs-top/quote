@@ -1,14 +1,11 @@
 use crate::app::app_error::AppError;
-use crate::infra::{QuoteRepoFile, QuoteRepoPgsql};
+use crate::infra::{QuoteRepoFile, QuoteRepoPgsql, Minio};
 use crate::quote::QuotePort;
-use aws_sdk_s3::Client as S3Client;
 use config::{Config, Environment, File};
 use directories::BaseDirs;
 use serde::Deserialize;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
-use aws_config::{BehaviorVersion, Region};
-use aws_sdk_s3::config::Credentials;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -16,7 +13,7 @@ pub struct AppState {
 
     pub config: Arc<AppConfig>,
 
-    pub s3: Option<Arc<S3Client>>,
+    pub minio: Option<Arc<Minio>>,
 }
 
 impl AppState {
@@ -41,27 +38,15 @@ impl AppState {
             }
         };
 
-        let s3 = if let Some(minio) = &config.minio {
-            let conf = aws_config::defaults(BehaviorVersion::latest())
-                .endpoint_url(&minio.endpoint)
-                .credentials_provider(Credentials::new(
-                    &minio.access_key,
-                    &minio.secret_key,
-                    None,
-                    None,
-                    "minio"
-                )).region(Region::new(minio.region.clone()))
-                .load()
-                .await;
-            Some(Arc::new(S3Client::new(&conf)))
-        } else {
-            None
+        let minio = match config.minio.as_ref() {
+            Some(cfg) => Some(Arc::new(Minio::new(cfg).await?)),
+            None => None,
         };
 
         Ok(Self {
             quote_port,
             config: Arc::new(config),
-            s3
+            minio,
         })
     }
 }
