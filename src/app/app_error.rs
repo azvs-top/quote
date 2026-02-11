@@ -57,6 +57,10 @@ pub enum AppError {
 
     #[error("quote not found")]
     QuoteNotFound,
+
+    // ===== Dict =====
+    #[error("dict not found")]
+    DictNotFound,
 }
 
 impl From<std::string::FromUtf8Error> for AppError {

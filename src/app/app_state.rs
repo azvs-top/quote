@@ -1,5 +1,6 @@
 use crate::app::app_error::AppError;
-use crate::infra::{QuoteRepoFile, QuoteRepoPgsql, Minio};
+use crate::dict::DictPort;
+use crate::infra::{DictRepoFile, DictRepoPgsql, Minio, QuoteRepoFile, QuoteRepoPgsql};
 use crate::quote::QuotePort;
 use config::{Config, Environment, File};
 use directories::BaseDirs;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct AppState {
     pub quote_port: Arc<dyn QuotePort + Send + Sync>,
+    pub dict_port: Arc<dyn DictPort + Send + Sync>,
 
     pub config: Arc<AppConfig>,
 
@@ -21,7 +23,10 @@ impl AppState {
         // 加载配置文件并校验语义
         let config = AppConfig::load().await?;
 
-        let quote_port: Arc<dyn QuotePort + Send + Sync> = match config.storage.backend {
+        let (quote_port, dict_port): (
+            Arc<dyn QuotePort + Send + Sync>,
+            Arc<dyn DictPort + Send + Sync>,
+        ) = match config.storage.backend {
             StorageBackend::Pgsql => {
                 let pgsql = config.storage.pgsql.as_ref().unwrap();
                 let pool = PgPoolOptions::new()
@@ -29,12 +34,18 @@ impl AppState {
                     .min_connections(pgsql.min_connections.unwrap_or(0))
                     .connect(&pgsql.url)
                     .await?;
-                Arc::new(QuoteRepoPgsql::new(pool))
+                (
+                    Arc::new(QuoteRepoPgsql::new(pool.clone())),
+                    Arc::new(DictRepoPgsql::new(pool)),
+                )
             }
             StorageBackend::File => {
                 let file = config.storage.file.as_ref().unwrap();
                 let path = file.resolve_path()?;
-                Arc::new(QuoteRepoFile::new(path))
+                (
+                    Arc::new(QuoteRepoFile::new(path.clone())),
+                    Arc::new(DictRepoFile::new(path)),
+                )
             }
         };
 
@@ -45,6 +56,7 @@ impl AppState {
 
         Ok(Self {
             quote_port,
+            dict_port,
             config: Arc::new(config),
             minio,
         })
