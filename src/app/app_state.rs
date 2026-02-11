@@ -162,10 +162,16 @@ fn default_region() -> String {
 pub struct QuoteConfig {
     #[serde(default = "default_inline_langs")]
     pub inline_langs: Vec<String>,
+    #[serde(default = "default_system_lang")]
+    pub system_lang: String,
 }
 
 fn default_inline_langs() -> Vec<String> {
     vec!["en".to_string()]
+}
+
+fn default_system_lang() -> String {
+    "en".to_string()
 }
 
 impl FileConfig {

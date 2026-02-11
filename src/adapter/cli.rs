@@ -73,6 +73,8 @@ struct GetDictArgs {
     pub page: Option<usize>,
     #[arg(long = "limit")]
     pub limit: Option<usize>,
+    #[arg(long = "json")]
+    pub json: bool,
 }
 
 pub async fn run(state: AppState) -> anyhow::Result<()> {
@@ -194,13 +196,42 @@ async fn handle_dict(state: AppState, args: &DictArgs) -> anyhow::Result<()> {
                 .with_type_active(get_args.active)
                 .with_limit(limit)
                 .with_offset(offset)
+                .langs(vec![state.config.quote.system_lang.clone()])
                 .build();
 
             let types = ListType::new(state.dict_port.as_ref())
                 .execute(query)
                 .await?;
 
-            println!("{}", serde_json::to_string_pretty(&types)?);
+            if get_args.json {
+                println!("{}", serde_json::to_string_pretty(&types)?);
+                return Ok(());
+            }
+
+            // --> BEGIN（数据对齐）:（每列最大宽度左对齐）
+            let rows: Vec<(String, String)> = types
+                .into_iter()
+                .map(|dict_type| (dict_type.type_key, dict_type.type_name.unwrap_or_default()))
+                .collect();
+
+            let key_width = rows
+                .iter()
+                .map(|(k, _)| k.len())
+                .max()
+                .unwrap_or(0)
+                .max("TYPE_KEY".len());
+            let name_width = rows
+                .iter()
+                .map(|(_, n)| n.len())
+                .max()
+                .unwrap_or(0)
+                .max("TYPE_NAME".len());
+
+            println!("{:<key_width$}  {:<name_width$}", "TYPE_KEY", "TYPE_NAME");
+            for (key, name) in rows {
+                println!("{:<key_width$}  {:<name_width$}", key, name);
+            }
+            // --> END（数据对齐）
         }
     }
     Ok(())

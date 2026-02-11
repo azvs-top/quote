@@ -29,38 +29,31 @@ impl Quote {
     }
 
     pub fn get_inline_texts_by_langs(&self, langs: &[String]) -> Result<Vec<String>, AppError> {
-        let mut texts = Vec::new();
-
-        match &self.content {
-            Value::Object(content_obj) => {
-                match content_obj.get("inline") {
-                    Some(Value::Object(inline_obj)) => {
-                        for lang in langs {
-                            match inline_obj.get(lang) {
-                                Some(Value::String(text)) => {
-                                    texts.push(text.to_string());
-                                }
-                                Some(_) => {
-                                    todo!("语言存在但不是字符串类型")
-                                }
-                                None => {
-                                    todo!("语言不存在")
-                                }
-                            }
-                        }
-                    }
-                    Some(_) => {
-                        todo!("inline存在但不是对象类型")
-                    }
-                    None => {
-                        todo!("inline不存在")
-                    }
-                }
-            }
-            _ => {
-                return Err(AppError::QuoteInvalidContent)
-            }
+        if langs.is_empty() {
+            return Err(AppError::QuoteMissingContent);
         }
+
+        let content_obj = self
+            .content
+            .as_object()
+            .ok_or(AppError::QuoteInvalidContent)?;
+
+        let inline_obj = content_obj
+            .get("inline")
+            .ok_or(AppError::QuoteMissingContent)?
+            .as_object()
+            .ok_or(AppError::QuoteInvalidContent)?;
+
+        let mut texts = Vec::with_capacity(langs.len());
+        for lang in langs {
+            let text = inline_obj
+                .get(lang)
+                .ok_or(AppError::QuoteMissingContent)?
+                .as_str()
+                .ok_or(AppError::QuoteInvalidContent)?;
+            texts.push(text.to_string());
+        }
+
         Ok(texts)
     }
 }
