@@ -44,13 +44,4 @@ pub trait DictPort {
     /// - `query.active`: 过滤 active 状态。
     /// - `query.limit` / `query.offset`: 分页。
     async fn list_item(&self, query: DictQuery) -> Result<Vec<Dict>, AppError>;
-
-    /// ***Brief***: 获取单个 item（按类型 + item key）
-    ///
-    /// # Parameters
-    /// - `query.langs`: 传给 `f_dict(langs)`，决定 `display_text` 的语言优先级。
-    /// - `query.type_id` 或 `query.type_key`: 指定字典类型。
-    /// - `query.item_id` 或 `query.item_key`: 指定具体 item。
-    /// - `query.active`: 过滤 active 状态（可选）。
-    async fn get_item(&self, query: DictQuery) -> Result<Dict, AppError>;
 }

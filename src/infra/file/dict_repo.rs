@@ -26,8 +26,4 @@ impl DictPort for DictRepoFile {
     async fn list_item(&self, query: DictQuery) -> Result<Vec<Dict>, AppError> {
         todo!()
     }
-
-    async fn get_item(&self, query: DictQuery) -> Result<Dict, AppError> {
-        todo!()
-    }
 }
