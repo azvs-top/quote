@@ -35,6 +35,8 @@ struct GetQuoteArgs {
     pub page: Option<usize>,
     #[arg(long = "limit")]
     pub limit: Option<usize>,
+    #[arg(long = "active")]
+    pub active: Option<bool>,
 }
 
 #[derive(Debug, clap::Args)]
@@ -54,8 +56,17 @@ struct AddQuoteArgs {
 
 #[derive(Debug, clap::Args)]
 struct DictArgs {
-    #[arg(long = "list")]
-    pub list: bool,
+    #[command(subcommand)]
+    command: DictCommands,
+}
+
+#[derive(Debug, Subcommand)]
+enum DictCommands {
+    Get(GetDictArgs),
+}
+
+#[derive(Debug, clap::Args)]
+struct GetDictArgs {
     #[arg(long = "active")]
     pub active: Option<bool>,
     #[arg(long = "page")]
@@ -88,6 +99,7 @@ async fn handle_get(state: AppState, args: &GetQuoteArgs) -> anyhow::Result<()> 
         // NOTE: 允许返回任何大模块的内容，以JSON形式呈现
         let offset = args.limit.map(|v| (page - 1) * v);
         let query = QuoteQuery::builder()
+            .with_active(args.active)
             .with_limit(args.limit.map(|v| v as i64))
             .with_offset(offset.map(|v| v as i64))
             .build();
@@ -100,11 +112,11 @@ async fn handle_get(state: AppState, args: &GetQuoteArgs) -> anyhow::Result<()> 
 
     // 情况三：不存在 id 和 page --> 随机获取一条
     // NOTE: 随机获取一条数据，在 CLI 下一定获取的是 inline的内容
-    let mut builder = QuoteQuery::builder();
+    let mut builder = QuoteQuery::builder().active(true);
 
-    if !state.config.quote.default_langs.is_empty() {
+    if !state.config.quote.inline_langs.is_empty() {
         builder = builder.filter(QuoteQueryFilter::HasInlineAllLang(
-            state.config.quote.default_langs.clone(),
+            state.config.quote.inline_langs.clone(),
         ));
     }
     let query = builder.build();
@@ -112,7 +124,7 @@ async fn handle_get(state: AppState, args: &GetQuoteArgs) -> anyhow::Result<()> 
     let quote = GetQuoteRandom::new(state.quote_port.as_ref())
         .execute(query)
         .await?;
-    let texts = quote.get_inline_texts_by_langs(&state.config.quote.default_langs)?;
+    let texts = quote.get_inline_texts_by_langs(&state.config.quote.inline_langs)?;
     for text in texts {
         println!("{}", text);
     }
@@ -171,25 +183,25 @@ async fn handle_add(state: AppState, args: &AddQuoteArgs) -> anyhow::Result<()> 
 }
 
 async fn handle_dict(state: AppState, args: &DictArgs) -> anyhow::Result<()> {
-    if !args.list {
-        anyhow::bail!("Only `quote dict --list` is currently supported");
+    match &args.command {
+        DictCommands::Get(get_args) => {
+            let limit = get_args.limit.map(|v| v as i64);
+            let offset = get_args
+                .page
+                .map(|page| (page.saturating_sub(1) * get_args.limit.unwrap_or(10)) as i64);
+
+            let query = DictQuery::builder()
+                .with_type_active(get_args.active)
+                .with_limit(limit)
+                .with_offset(offset)
+                .build();
+
+            let types = ListType::new(state.dict_port.as_ref())
+                .execute(query)
+                .await?;
+
+            println!("{}", serde_json::to_string_pretty(&types)?);
+        }
     }
-
-    let limit = args.limit.map(|v| v as i64);
-    let offset = args
-        .page
-        .map(|page| (page.saturating_sub(1) * args.limit.unwrap_or(10)) as i64);
-
-    let query = DictQuery::builder()
-        .with_type_active(args.active)
-        .with_limit(limit)
-        .with_offset(offset)
-        .build();
-
-    let types = ListType::new(state.dict_port.as_ref())
-        .execute(query)
-        .await?;
-
-    println!("{}", serde_json::to_string_pretty(&types)?);
     Ok(())
 }
