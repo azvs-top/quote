@@ -5,11 +5,11 @@ const DEFAULT_PAGE_SIZE: i64 = 10;
 const MAX_PAGE_SIZE: i64 = 100;
 
 pub struct ListQuotes<'a> {
-    port: &'a dyn QuotePort,
+    port: &'a (dyn QuotePort + Send + Sync),
 }
 
 impl<'a> ListQuotes<'a> {
-    pub fn new(port: &'a dyn QuotePort) -> Self {
+    pub fn new(port: &'a (dyn QuotePort + Send + Sync)) -> Self {
         Self { port }
     }
 

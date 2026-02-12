@@ -68,6 +68,8 @@ pub struct AppConfig {
     pub storage: StorageConfig,
     pub minio: Option<MinioConfig>,
     pub quote: QuoteConfig,
+    #[serde(default)]
+    pub http: HttpConfig,
 }
 
 impl AppConfig {
@@ -172,6 +174,54 @@ fn default_inline_langs() -> Vec<String> {
 
 fn default_system_lang() -> String {
     "en".to_string()
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct HttpConfig {
+    #[serde(default = "default_http_addr")]
+    pub addr: String,
+    #[serde(default)]
+    pub cors_enabled: bool,
+    #[serde(default)]
+    pub cors_allow_credentials: bool,
+    #[serde(default)]
+    pub cors_origins: Vec<String>,
+    #[serde(default = "default_http_cors_methods")]
+    pub cors_methods: Vec<String>,
+    #[serde(default = "default_http_cors_headers")]
+    pub cors_headers: Vec<String>,
+}
+
+impl Default for HttpConfig {
+    fn default() -> Self {
+        Self {
+            addr: default_http_addr(),
+            cors_enabled: false,
+            cors_allow_credentials: false,
+            cors_origins: Vec::new(),
+            cors_methods: default_http_cors_methods(),
+            cors_headers: default_http_cors_headers(),
+        }
+    }
+}
+
+fn default_http_addr() -> String {
+    "127.0.0.1:3000".to_string()
+}
+
+fn default_http_cors_methods() -> Vec<String> {
+    vec![
+        "GET".to_string(),
+        "POST".to_string(),
+        "PUT".to_string(),
+        "PATCH".to_string(),
+        "DELETE".to_string(),
+        "OPTIONS".to_string(),
+    ]
+}
+
+fn default_http_cors_headers() -> Vec<String> {
+    vec!["content-type".to_string(), "authorization".to_string()]
 }
 
 impl FileConfig {

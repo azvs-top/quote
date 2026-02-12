@@ -2,11 +2,11 @@ use crate::app::app_error::AppError;
 use crate::dict::{DictPort, DictQuery, DictType};
 
 pub struct GetTypeByKey<'a> {
-    port: &'a dyn DictPort,
+    port: &'a (dyn DictPort + Send + Sync),
 }
 
 impl<'a> GetTypeByKey<'a> {
-    pub fn new(port: &'a dyn DictPort) -> Self {
+    pub fn new(port: &'a (dyn DictPort + Send + Sync)) -> Self {
         Self { port }
     }
 

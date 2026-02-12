@@ -2,10 +2,10 @@ use crate::app::app_error::AppError;
 use crate::quote::{Quote, QuotePort, QuoteQuery};
 
 pub struct GetQuoteById<'a> {
-    port: &'a dyn QuotePort,
+    port: &'a (dyn QuotePort + Send + Sync),
 }
 impl<'a> GetQuoteById<'a> {
-    pub fn new(port: &'a dyn QuotePort) -> Self {
+    pub fn new(port: &'a (dyn QuotePort + Send + Sync)) -> Self {
         Self { port }
     }
 

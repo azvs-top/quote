@@ -5,11 +5,11 @@ const DEFAULT_PAGE_SIZE: i64 = 10;
 const DEFAULT_OFFSET: i64 = 0;
 
 pub struct ListType<'a> {
-    port: &'a dyn DictPort,
+    port: &'a (dyn DictPort + Send + Sync),
 }
 
 impl<'a> ListType<'a> {
-    pub fn new(port: &'a dyn DictPort) -> Self {
+    pub fn new(port: &'a (dyn DictPort + Send + Sync)) -> Self {
         Self { port }
     }
 

@@ -2,11 +2,11 @@ use crate::app::AppError;
 use crate::quote::{Quote, QuotePort, QuoteQuery};
 
 pub struct GetQuoteRandom<'a> {
-    port: &'a dyn QuotePort,
+    port: &'a (dyn QuotePort + Send + Sync),
 }
 
 impl<'a> GetQuoteRandom<'a> {
-    pub fn new(port: &'a dyn QuotePort) -> Self {
+    pub fn new(port: &'a (dyn QuotePort + Send + Sync)) -> Self {
         Self { port }
     }
 
