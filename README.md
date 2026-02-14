@@ -18,7 +18,7 @@ cargo run --bin quote-http
 
 最小示例：
 
-```toml
+``` toml
 [storage]
 backend = "pgsql"
 
@@ -38,49 +38,42 @@ cors_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 cors_headers = ["content-type","authorization"]
 ```
 
-## 已实现 CLI 命令
-
-1. `quote get`
-- `--id <ID>`: 按 ID 获取单条 quote（JSON）。
-- `--page <N> --limit <M> [--active <true|false>]`: 分页获取列表（JSON）。
-- 不带 `--id/--page`: 随机获取一条（按 `quote.inline_langs` 输出 inline 文本）。
-
-2. `quote add`
-- 支持参数收集与校验：
-`--lang <LANG> <TEXT>`、`--file <LANG> <FILE>`、`--md <LANG> <FILE>`、`--image <FILE>`
-- 当前状态：仅校验并打印草稿，持久化尚未实现。
-
-3. `quote dict get`
-- 支持 `--active --page --limit --json`
-- 默认表格输出，`--json` 输出 JSON。
-
-4. `quote dict-item get <TYPE>`
-- 支持 `--active --page --limit --json`
-- 默认表格输出，`--json` 输出 JSON。
-
-## 已实现 HTTP 接口
-
-Base: `http://127.0.0.1:3000`
-
-1. `GET /hello`
-- 测试接口，返回服务状态。
-
-2. `GET /quote/random`
-- 随机获取一条 quote。
-- 查询参数：`active`（可选）。
-
-3. `GET /quote/{id}`
-- 按 ID 获取 quote。
-
-4. `GET /quotes`
-- 获取 quote 列表。
-- 查询参数：`active`、`page`、`limit`（可选）。
-
-## Git 推送（Gitea + GitHub）
-
-手动分别推送：
-
-```bash
+``` bash
 git push origin master
 git push github master
 ```
+
+# v0.2.0 开端
+
+### QuotePort（面向 Quote 聚合）
+
+1. create(QuoteCreate) -> Result<Quote, AppError>
+2. get(query: QuoteQuery) -> Result<Quote, AppError>
+3. list(query: QuoteQuery) -> Result<Vec<Quote>, AppError>
+4. update(QuoteUpdate) -> Result<Quote, AppError>
+5. delete(id: i64) -> Result<(), AppError>（可选）
+
+### StoragePort（面向对象存储）
+
+1. upload(path: &str, payload: StoragePayload, content_type: &str) ->
+   Result<ObjectKey, AppError>
+2. delete(key: &ObjectKey) -> Result<(), AppError>（补偿事务建议必
+   备）
+3. exists(key: &ObjectKey) -> Result<bool, AppError>（可选）
+4. download(key: &ObjectKey) -> Result<Vec<u8>, AppError>（可选，若后
+   续要下载）
+
+### Quote Entity
+``` rust
+- id: i64
+- inline: HashMap<Lang, String>
+- external: HashMap<Lang, ObjectKey>
+- markdown: HashMap<Lang, ObjectKey>
+- image: Vec<ObjectKey>
+- remark: Option<String>
+```
++ QuoteCreate： 不包含 id
++ QuoteUpdate： id + 可选字段
++ QuoteQuery： id + filter + limit + offset
++ struct Lang(String)：在new中做格式校验
++ struct ObjectKey(String)：在new中避免非法路径
