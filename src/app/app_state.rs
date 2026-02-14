@@ -22,6 +22,10 @@ impl AppState {
     pub async fn new() -> Result<Self, AppError> {
         // 加载配置文件并校验语义
         let config = AppConfig::load().await?;
+        let minio = match config.minio.as_ref() {
+            Some(cfg) => Some(Arc::new(Minio::new(cfg).await?)),
+            None => None,
+        };
 
         let (quote_port, dict_port): (
             Arc<dyn QuotePort + Send + Sync>,
@@ -35,7 +39,7 @@ impl AppState {
                     .connect(&pgsql.url)
                     .await?;
                 (
-                    Arc::new(QuoteRepoPgsql::new(pool.clone())),
+                    Arc::new(QuoteRepoPgsql::new(pool.clone(), minio.clone())),
                     Arc::new(DictRepoPgsql::new(pool)),
                 )
             }
@@ -48,12 +52,6 @@ impl AppState {
                 )
             }
         };
-
-        let minio = match config.minio.as_ref() {
-            Some(cfg) => Some(Arc::new(Minio::new(cfg).await?)),
-            None => None,
-        };
-
         Ok(Self {
             quote_port,
             dict_port,

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::FromRow;
 use crate::app::app_error::AppError;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Quote {
@@ -56,6 +57,30 @@ impl Quote {
 
         Ok(texts)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct QuoteAdd {
+    pub content: Value,
+    pub active: Option<bool>,
+    pub remark: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct QuoteAddDraft {
+    pub inline: HashMap<String, String>,
+    pub external: HashMap<String, QuoteFilePayload>,
+    pub markdown: HashMap<String, QuoteFilePayload>,
+    pub image: Vec<QuoteFilePayload>,
+    pub audio: HashMap<String, Vec<QuoteFilePayload>>,
+    pub active: Option<bool>,
+    pub remark: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct QuoteFilePayload {
+    pub filename: Option<String>,
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Default, Debug, Clone)]

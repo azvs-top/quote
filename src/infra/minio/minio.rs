@@ -72,34 +72,54 @@ impl Minio {
         Ok(String::from_utf8(bytes.to_vec())?)
     }
 
-    pub async fn put_text(&self, path: &str, txt: &str) -> Result<String, AppError> {
-        // 随机生成文件名并
-        let key = format!("{}/{}", path.trim_end_matches("/"), Uuid::new_v4());
-        let body = ByteStream::from(txt.as_bytes().to_vec());
-
-        self.client
-            .put_object()
-            .bucket(&self.bucket)
-            .key(&key)
-            .body(body)
-            .content_type("text/plain; charset=utf-8")
-            .send()
-            .await
-            .map_err(map_s3_error)?;
-
-        Ok(key)
+    /// 上传纯文本文件，固定 content-type 为 text/plain.
+    pub async fn put_text_file(&self, path: &str, body: ByteStream) -> Result<String, AppError> {
+        // NOTE: 兼容已有调用；推荐在未来逐步改为按真实格式调用 put_markdown/put_image/put_audio.
+        self.put_object(path, body, "text/plain; charset=utf-8").await
     }
 
-    pub async fn put_text_file(&self, path: &str, body: ByteStream) -> Result<String, AppError> {
-        let key = format!("{}/{}", path.trim_end_matches("/"), Uuid::new_v4());
+    /// 上传 markdown 文件，固定 content-type 为 text/markdown.
+    pub async fn put_markdown(&self, path: &str, body: ByteStream) -> Result<String, AppError> {
+        self.put_object(path, body, "text/markdown; charset=utf-8")
+            .await
+    }
+
+    /// 上传图片文件。content_type 建议传入真实 MIME（如 image/png, image/webp）。
+    pub async fn put_image(
+        &self,
+        path: &str,
+        body: ByteStream,
+        content_type: &str,
+    ) -> Result<String, AppError> {
+        self.put_object(path, body, content_type).await
+    }
+
+    /// 上传音频文件。content_type 建议传入真实 MIME（如 audio/mpeg, audio/wav）。
+    pub async fn put_audio(
+        &self,
+        path: &str,
+        body: ByteStream,
+        content_type: &str,
+    ) -> Result<String, AppError> {
+        self.put_object(path, body, content_type).await
+    }
+
+    /// 上传对象到底层存储并返回 key。
+    /// key 规则：{path}/{uuid}，用于避免命名冲突。
+    async fn put_object(
+        &self,
+        path: &str,
+        body: ByteStream,
+        content_type: &str,
+    ) -> Result<String, AppError> {
+        let key = format!("{}/{}", path.trim_end_matches('/'), Uuid::new_v4());
 
         self.client
             .put_object()
             .bucket(&self.bucket)
             .key(&key)
             .body(body)
-            // NOTE: content_type是我自称的类型，并无法保证类型正确。
-            .content_type("text/plain; charset=utf-8")
+            .content_type(content_type)
             .send()
             .await
             .map_err(map_s3_error)?;

@@ -1,15 +1,20 @@
 use crate::app::app_error::AppError;
-use crate::quote::{Quote, QuotePort, QuoteQuery, QuoteQueryFilter};
+use crate::infra::Minio;
+use crate::quote::{Quote, QuoteAdd, QuoteFilePayload, QuotePort, QuoteQuery, QuoteQueryFilter};
 use async_trait::async_trait;
+use aws_sdk_s3::primitives::ByteStream;
+use serde_json::Value;
 use sqlx::{PgPool, Postgres, QueryBuilder};
+use std::sync::Arc;
 use crate::{json_exists, PgJson};
 
 pub struct QuoteRepoPgsql {
     pool: PgPool,
+    minio: Option<Arc<Minio>>,
 }
 impl QuoteRepoPgsql {
-    pub fn new(pool: PgPool) -> Self {
-        QuoteRepoPgsql { pool }
+    pub fn new(pool: PgPool, minio: Option<Arc<Minio>>) -> Self {
+        QuoteRepoPgsql { pool, minio }
     }
 
     fn apply_filter(
@@ -88,6 +93,59 @@ impl QuoteRepoPgsql {
 
 #[async_trait]
 impl QuotePort for QuoteRepoPgsql {
+    async fn upload_object(
+        &self,
+        path: &str,
+        payload: QuoteFilePayload,
+        content_type: &str,
+    ) -> Result<String, AppError> {
+        let minio = self.minio.as_ref().ok_or(AppError::ExternalStorageError)?;
+        let body = ByteStream::from(payload.bytes);
+
+        if content_type.starts_with("text/markdown") {
+            return minio.put_markdown(path, body).await;
+        }
+        if content_type.starts_with("image/") {
+            return minio.put_image(path, body, content_type).await;
+        }
+        if content_type.starts_with("audio/") {
+            return minio.put_audio(path, body, content_type).await;
+        }
+
+        minio.put_text_file(path, body).await
+    }
+
+    async fn add(&self, add: QuoteAdd) -> Result<Quote, AppError> {
+        let quote = sqlx::query_as::<_, Quote>(
+            "INSERT INTO quote.quote(content, active, remark) \
+             VALUES ($1, COALESCE($2, true), $3) \
+             RETURNING id, content, active, remark"
+        )
+        .bind(add.content)
+        .bind(add.active)
+        .bind(add.remark)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(quote)
+    }
+
+    async fn update_content(&self, id: i64, content: Value) -> Result<Quote, AppError> {
+        let quote = sqlx::query_as::<_, Quote>(
+            "UPDATE quote.quote
+             SET content = $2
+             WHERE id = $1
+             RETURNING id, content, active, remark"
+        )
+        .bind(id)
+        .bind(content)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(AppError::QuoteNotFound)?;
+
+        Ok(quote)
+    }
+
     async fn get(&self, query: QuoteQuery) -> Result<Quote, AppError> {
         let mut sql = QueryBuilder::<Postgres>::new(
             "SELECT id, content, active, remark FROM quote.quote WHERE 1=1"

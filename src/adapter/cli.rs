@@ -1,8 +1,14 @@
 use crate::app::AppState;
 use crate::dict::{DictQuery, ListType};
-use crate::quote::{GetQuoteById, GetQuoteRandom, ListQuotes, QuoteQuery, QuoteQueryFilter};
+use crate::quote::{
+    AddAudioById, AddImageById, AddMarkdownById, AddTextById, AddTextFileById, CreateQuote,
+    GetQuoteById, GetQuoteRandom, ListQuotes, QuoteAddDraft, QuoteFilePayload, QuoteQuery,
+    QuoteQueryFilter,
+};
 use clap::{Parser, Subcommand};
+use serde_json::Value;
 use std::collections::HashMap;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use unicode_width::UnicodeWidthStr;
 
@@ -43,6 +49,9 @@ struct GetQuoteArgs {
 
 #[derive(Debug, clap::Args)]
 struct AddQuoteArgs {
+    #[arg(long = "id")]
+    pub id: Option<i64>,
+
     #[arg(long = "lang", value_names = ["LANG", "TEXT"], num_args = 2)]
     pub lang: Vec<String>,
 
@@ -53,7 +62,10 @@ struct AddQuoteArgs {
     pub md: Vec<String>,
 
     #[arg(long = "image")]
-    pub image: Option<PathBuf>,
+    pub image: Vec<PathBuf>,
+
+    #[arg(long = "audio")]
+    pub audio: Option<PathBuf>,
 }
 
 #[derive(Debug, clap::Args)]
@@ -205,17 +217,182 @@ async fn handle_add(state: AppState, args: &AddQuoteArgs) -> anyhow::Result<()> 
         entry.md = Some(file);
     }
 
-    if draft.is_empty() {
+    if draft.is_empty() && args.image.is_empty() && args.audio.is_none() {
         anyhow::bail!("No inputs to add");
     }
 
-    // todo!("交付给add_quote_usecase(state, draft).await?;");
-    println!("Draft collected:\n{:#?}", draft);
-    println!("AddQuote validated, but persistence not implemented yet.");
+    if let Some(id) = args.id {
+        let mut latest = GetQuoteById::new(state.quote_port.as_ref())
+            .execute(id)
+            .await?;
+
+        for (lang, entry) in &draft {
+            if let Some(txt) = &entry.inline {
+                if has_value_key(&latest.content, "inline", lang)
+                    && !confirm_overwrite(&format!("inline.{lang}"))?
+                {
+                    continue;
+                }
+                latest = AddTextById::new(state.quote_port.as_ref())
+                    .execute(id, lang.clone(), txt.clone())
+                    .await?;
+            }
+
+            if let Some(path) = &entry.file {
+                if has_value_key(&latest.content, "external", lang)
+                    && !confirm_overwrite(&format!("external.{lang}"))?
+                {
+                    continue;
+                }
+                latest = AddTextFileById::new(state.quote_port.as_ref())
+                    .execute(
+                        id,
+                        lang.clone(),
+                        QuoteFilePayload {
+                            filename: path.file_name().map(|v| v.to_string_lossy().to_string()),
+                            bytes: tokio::fs::read(path).await?,
+                        },
+                    )
+                    .await?;
+            }
+
+            if let Some(path) = &entry.md {
+                if has_value_key(&latest.content, "markdown", lang)
+                    && !confirm_overwrite(&format!("markdown.{lang}"))?
+                {
+                    continue;
+                }
+                latest = AddMarkdownById::new(state.quote_port.as_ref())
+                    .execute(
+                        id,
+                        lang.clone(),
+                        QuoteFilePayload {
+                            filename: path.file_name().map(|v| v.to_string_lossy().to_string()),
+                            bytes: tokio::fs::read(path).await?,
+                        },
+                    )
+                    .await?;
+            }
+        }
+
+        for image in &args.image {
+            latest = AddImageById::new(state.quote_port.as_ref())
+                .execute(
+                    id,
+                    QuoteFilePayload {
+                        filename: image.file_name().map(|v| v.to_string_lossy().to_string()),
+                        bytes: tokio::fs::read(image).await?,
+                    },
+                )
+                .await?;
+        }
+
+        if let Some(audio) = &args.audio {
+            if has_array_group(&latest.content, "audio", "default")
+                && !confirm_overwrite("audio.default")?
+            {
+                println!("{}", serde_json::to_string_pretty(&latest)?);
+                return Ok(());
+            }
+            latest = AddAudioById::new(state.quote_port.as_ref())
+                .execute(
+                    id,
+                    "default",
+                    QuoteFilePayload {
+                        filename: audio.file_name().map(|v| v.to_string_lossy().to_string()),
+                        bytes: tokio::fs::read(audio).await?,
+                    },
+                )
+                .await?;
+        }
+
+        println!("{}", serde_json::to_string_pretty(&latest)?);
+        return Ok(());
+    }
+
+    let mut add_draft = QuoteAddDraft::default();
+
+    for (lang, entry) in draft {
+        if let Some(txt) = entry.inline {
+            add_draft.inline.insert(lang.clone(), txt);
+        }
+
+        if let Some(path) = entry.file {
+            add_draft.external.insert(
+                lang.clone(),
+                QuoteFilePayload {
+                    filename: path.file_name().map(|v| v.to_string_lossy().to_string()),
+                    bytes: tokio::fs::read(path).await?,
+                },
+            );
+        }
+
+        if let Some(path) = entry.md {
+            add_draft.markdown.insert(
+                lang.clone(),
+                QuoteFilePayload {
+                    filename: path.file_name().map(|v| v.to_string_lossy().to_string()),
+                    bytes: tokio::fs::read(path).await?,
+                },
+            );
+        }
+    }
+
+    for path in &args.image {
+        add_draft.image.push(QuoteFilePayload {
+            filename: path.file_name().map(|v| v.to_string_lossy().to_string()),
+            bytes: tokio::fs::read(path).await?,
+        });
+    }
+
+    if let Some(path) = &args.audio {
+        add_draft
+            .audio
+            .entry("default".to_string())
+            .or_default()
+            .push(QuoteFilePayload {
+                filename: path.file_name().map(|v| v.to_string_lossy().to_string()),
+                bytes: tokio::fs::read(path).await?,
+            });
+    }
+
+    let quote = CreateQuote::new(state.quote_port.as_ref())
+        .execute(add_draft)
+        .await?;
+
+    println!("{}", serde_json::to_string_pretty(&quote)?);
 
     Ok(())
 }
 
+fn has_value_key(content: &Value, top: &str, key: &str) -> bool {
+    content
+        .as_object()
+        .and_then(|root| root.get(top))
+        .and_then(|v| v.as_object())
+        .and_then(|obj| obj.get(key))
+        .is_some()
+}
+
+fn has_array_group(content: &Value, top: &str, group: &str) -> bool {
+    content
+        .as_object()
+        .and_then(|root| root.get(top))
+        .and_then(|v| v.as_object())
+        .and_then(|obj| obj.get(group))
+        .and_then(|v| v.as_array())
+        .map(|arr| !arr.is_empty())
+        .unwrap_or(false)
+}
+
+fn confirm_overwrite(target: &str) -> anyhow::Result<bool> {
+    print!("`{target}` already exists. Overwrite? [y/N]: ");
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let v = input.trim().to_ascii_lowercase();
+    Ok(v == "y" || v == "yes")
+}
 async fn handle_dict(state: AppState, args: &DictArgs) -> anyhow::Result<()> {
     match &args.command {
         DictCommands::Get(get_args) => {
