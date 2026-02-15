@@ -1,84 +1,78 @@
 # azvs_quote
 
-一个基于 Rust 的 quote 服务，包含 CLI 和 HTTP 两种入口。
-
-## 运行
+## 开发手册
 
 ```bash
-# CLI
-cargo run --bin quote -- <args>
-
-# HTTP
-cargo run --bin quote-http
-```
-
-## 配置文件
-
-默认读取：`~/.config/azvs/quote.toml`
-
-最小示例：
-
-``` toml
-[storage]
-backend = "pgsql"
-
-[storage.pgsql]
-url = "postgres://user:pass@127.0.0.1:5432/quote"
-
-[quote]
-inline_langs = ["en"]
-system_lang = "en"
-
-[http]
-addr = "127.0.0.1:3000"
-cors_enabled = true
-cors_allow_credentials = true
-cors_origins = ["http://localhost:2002", "http://localhost:32002", "https://quote.azvs.lan", "https://quote.azvs.top"]
-cors_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-cors_headers = ["content-type","authorization"]
-```
-
-``` bash
 git push origin master
 git push github master
 ```
 
-# v0.2.0 开端
-
-### QuotePort（面向 Quote 聚合）
-
-1. create(QuoteCreate) -> Result<Quote, AppError>
-2. get(query: QuoteQuery) -> Result<Quote, AppError>
-3. list(query: QuoteQuery) -> Result<Vec<Quote>, AppError>
-4. update(QuoteUpdate) -> Result<Quote, AppError>
-5. delete(id: i64) -> Result<(), AppError>（可选）
-
-### StoragePort（面向对象存储）
-
-1. upload(path: &str, payload: StoragePayload, content_type: &str) ->
-   Result<ObjectKey, AppError>
-2. delete(key: &ObjectKey) -> Result<(), AppError>（补偿事务建议必
-   备）
-3. exists(key: &ObjectKey) -> Result<bool, AppError>（可选）
-4. download(key: &ObjectKey) -> Result<Vec<u8>, AppError>（可选，若后
-   续要下载）
-
-### Quote Entity
-``` rust
-- id: i64
-- inline: HashMap<Lang, String>
-- external: HashMap<Lang, ObjectKey>
-- markdown: HashMap<Lang, ObjectKey>
-- image: Vec<ObjectKey>
-- remark: Option<String>
+```bash
+cargo build --release
 ```
-+ QuoteCreate： 不包含 id
-+ QuoteUpdate： id + 可选字段
-+ QuoteQuery： id + filter + limit + offset
-+ struct Lang(String)：在new中做格式校验
-+ struct ObjectKey(String)：在new中避免非法路径
 
-# 配置文件
+### 架构视角（DDD架构）
+```mermaid
+flowchart TB
+
+subgraph Adapters
+CLI[CLI]
+end
+
+subgraph Application
+APP[Application Service]
+end
+
+subgraph Domain
+PORTS[QuotePort / StoragePort]
+end
+
+subgraph Infrastructure
+QINFRA[Quote Repository Impl]
+SINFRA[Storage Service Impl]
+end
+
+subgraph External
+DB[(Postgres / MySQL)]
+OBJ[(MinIO / File)]
+end
+
+CLI --> APP
+APP --> PORTS
+PORTS --> QINFRA
+PORTS --> SINFRA
+QINFRA --> DB
+SINFRA --> OBJ
+```
+
+### 启动装配流程（v0.2.0）
+```mermaid
+flowchart TD
+    A["bin/cli main()"] --> B["ApplicationState::new().await"]
+    B --> C["ApplicationConfig::load()"]
+    C --> D["validate_semantics()"]
+
+    D --> E{"database.backend"}
+    E -->|"postgres"| F["PgPoolOptions::connect(url)"]
+    F --> G["PostgresQuoteRepo::new(pool)"]
+    E -->|"mysql"| E1["返回未实现错误"]
+
+    D --> H{"storage.backend"}
+    H -->|"minio"| I["MinioStorageRepo::new(config).await"]
+    H -->|"file"| H1["返回未实现错误"]
+
+    G --> J["ApplicationState { quote_port, storage_port, config }"]
+    I --> J
+
+    J --> K["adapter::cli::run(state)"]
+    K --> L{"clap 子命令"}
+    L -->|"get/list/create/update/delete"| M["application services"]
+    M --> N["QuotePort trait"]
+    M --> O["StoragePort trait"]
+```
+
+## 配置文件(v0.2.0)
+> 默认读取：`~/.config/azvs/quote.toml`
 ```toml
 [database]
 backend = "postgres" # postgres | mysql
@@ -96,9 +90,9 @@ min_connections = 0
 backend = "minio" # minio | file
 
 [storage.minio]
-endpoint = "http://azvs.lan:9000"
-access_key = "root"
-secret_key = "rootroot"
+endpoint = "https://minio.azvs.com"
+access_key = "username"
+secret_key = "password"
 bucket = "quote"
 region = "us-east-1"
 
@@ -106,3 +100,33 @@ region = "us-east-1"
 # todo
 # root = "/data/quote"
 ```
+
+## Quote-CLI
++ `quote get`
+  + `--id <id>` 按 id 获取，不带 id 则随机获取。
+    + 随机模式下，指定模板，按照模板是否存在过滤。
+  + `--format '{{.id}}'` 模板输出。
++ `quote list`
+  + `--page\--limit` 分页。
+  + `--format '{{...}}'` 模板输出。
++ `quote create` 除 remark 外，其余参数均可使用多次。（相同语言模块下的相同语言会被覆盖）
+  + `--inline <lang> <text>`
+  + `--external <lang> <file>`
+  + `--markdown <lang> <file>`
+  + `--image <file>`
+  + `--remark <text>`
++ `quote update`
+  + `--id <id>` 必填
+  + 参数风格与 create 一致
+  + `--remark / --clear-remark`
+  + 必须确认：--yes/-y 或交互输入 yes
+  + 同一模块，多语言字段按语言粒度覆盖
+  + image 为追加语义
++ `quote delete`
+  + 整条删除：仅传 `--id <id>`
+  + 部分删除:
+    + `--inline <lang> / --all-inline`
+    + `--external <lang> / --all-external`
+    + `--markdown <lang> / --all-markdown`
+    + `--image <object_key> / --all-image`
+    + 必须确认：--yes/-y 或交互输入 yes

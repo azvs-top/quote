@@ -5,7 +5,7 @@ use crate::application::service::storage::{
 };
 use crate::application::storage::StoragePayload;
 use crate::application::ApplicationError;
-use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
+use crate::domain::entity::{MultiLangText, Quote};
 use crate::domain::value::{Lang, ObjectKey};
 use std::collections::{HashMap, HashSet};
 
@@ -76,7 +76,7 @@ impl<'a> UpdateQuoteService<'a> {
         let mut plan = UpdateUploadPlan::from_update_draft(&draft)?;
         let items = std::mem::take(&mut plan.items);
         let uploaded = self.upload_service.execute(items).await?;
-        let update = plan.to_update(&draft, &uploaded)?;
+        let update = plan.to_update(&draft, &previous, &uploaded)?;
 
         let updated = match self.quote_port.update(update).await {
             Ok(quote) => quote,
@@ -224,6 +224,7 @@ impl UpdateUploadPlan {
     fn to_update(
         &self,
         draft: &QuoteUpdateDraft,
+        previous: &Quote,
         uploaded: &[ObjectKey],
     ) -> Result<QuoteUpdate, ApplicationError> {
         let expected =
@@ -238,7 +239,8 @@ impl UpdateUploadPlan {
         let mut idx = 0usize;
 
         let external = if self.replace_external {
-            let mut map = MultiLangObject::new();
+            // patch merge: 未传语言保持原值，传入语言覆盖为新上传 key。
+            let mut map = previous.external().clone();
             for lang in &self.external_langs {
                 map.insert(lang.clone(), uploaded[idx].clone());
                 idx += 1;
@@ -249,7 +251,8 @@ impl UpdateUploadPlan {
         };
 
         let markdown = if self.replace_markdown {
-            let mut map = MultiLangObject::new();
+            // patch merge: 未传语言保持原值，传入语言覆盖为新上传 key。
+            let mut map = previous.markdown().clone();
             for lang in &self.markdown_langs {
                 map.insert(lang.clone(), uploaded[idx].clone());
                 idx += 1;
@@ -260,14 +263,28 @@ impl UpdateUploadPlan {
         };
 
         let image = if self.replace_image {
-            Some(uploaded[idx..].to_vec())
+            // patch merge: image 使用追加语义。
+            let mut merged = previous.image().to_vec();
+            merged.extend_from_slice(&uploaded[idx..]);
+            Some(merged)
+        } else {
+            None
+        };
+
+        let inline = if let Some(inline_patch) = &draft.inline {
+            // patch merge: 未传语言保持原值，传入语言覆盖文本。
+            let mut merged = previous.inline().clone();
+            for (lang, text) in inline_patch {
+                merged.insert(lang.clone(), text.clone());
+            }
+            Some(merged)
         } else {
             None
         };
 
         Ok(QuoteUpdate {
             id: draft.id,
-            inline: draft.inline.clone(),
+            inline,
             external,
             markdown,
             image,
