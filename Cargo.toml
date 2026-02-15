@@ -1,6 +1,6 @@
 [package]
 name = "azvs_quote"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [[bin]]
@@ -42,10 +42,11 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "macros"] }
 clap = { version = "4.5.57", features = ["derive"] }
 unicode-width = "0.2.0"
 tower-http = { version = "0.6.6", features = ["cors"] }
-infer = "0.16.0"
+infer = "0.19.0"
 
 # AWS S3 SDK
 aws-config = "1.8.13"
 aws-sdk-s3 = "1.122.0"
 log = "0.4.29"
 uuid = { version = "1.20.0", features = ["v4"] }
+state = "0.6.0"

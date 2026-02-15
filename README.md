@@ -77,3 +77,32 @@ git push github master
 + QuoteQuery： id + filter + limit + offset
 + struct Lang(String)：在new中做格式校验
 + struct ObjectKey(String)：在new中避免非法路径
+
+# 配置文件
+```toml
+[database]
+backend = "postgres" # postgres | mysql
+
+[database.postgres]
+url = "postgres://azvs:azvs@azvs.lan:5432/azvs"
+max_connections = 10
+min_connections = 0
+
+[database.mysql]
+# todo
+# url = "mysql://..."
+
+[storage]
+backend = "minio" # minio | file
+
+[storage.minio]
+endpoint = "http://azvs.lan:9000"
+access_key = "root"
+secret_key = "rootroot"
+bucket = "quote"
+region = "us-east-1"
+
+[storage.file]
+# todo
+# root = "/data/quote"
+```
