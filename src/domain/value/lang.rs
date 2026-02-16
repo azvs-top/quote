@@ -19,7 +19,23 @@ pub struct Lang(String);
 impl Lang {
     pub fn new(raw: impl Into<String>) -> Result<Self, DomainError> {
         let value = raw.into();
-        validate_lang(&value)?;
+
+        // 规则 1：语言编码不能为空，且长度不能超过 16。
+        if value.is_empty() || value.len() > 16 {
+            return Err(DomainError::InvalidLang(value));
+        }
+        // 规则 2：仅允许小写字母、数字与连字符。
+        if !value
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+        {
+            return Err(DomainError::InvalidLang(value));
+        }
+        // 规则 3：不允许以 `-` 开头/结尾，也不允许连续 `--`。
+        if value.starts_with('-') || value.ends_with('-') || value.contains("--") {
+            return Err(DomainError::InvalidLang(value));
+        }
+
         Ok(Self(value))
     }
 
@@ -60,23 +76,4 @@ impl From<Lang> for String {
     fn from(value: Lang) -> Self {
         value.0
     }
-}
-
-fn validate_lang(value: &str) -> Result<(), DomainError> {
-    if value.is_empty() || value.len() > 16 {
-        return Err(DomainError::InvalidLang(value.to_string()));
-    }
-
-    if !value
-        .chars()
-        .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
-    {
-        return Err(DomainError::InvalidLang(value.to_string()));
-    }
-
-    if value.starts_with('-') || value.ends_with('-') || value.contains("--") {
-        return Err(DomainError::InvalidLang(value.to_string()));
-    }
-
-    Ok(())
 }

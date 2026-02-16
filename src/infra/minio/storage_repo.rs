@@ -7,7 +7,6 @@ use aws_sdk_s3::config::Credentials;
 use aws_sdk_s3::error::ProvideErrorMetadata;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::{Client, Config};
-use std::path::Path;
 use uuid::Uuid;
 
 pub struct MinioStorageRepo {
@@ -66,34 +65,11 @@ impl MinioStorageRepo {
             .unwrap_or(false)
     }
 
-    /// 生成对象 key：`{path}/{uuid}[.ext]`，并复用 `ObjectKey` 做合法性校验。
-    fn build_object_key(path: &str, filename: Option<&str>) -> Result<ObjectKey, ApplicationError> {
+    /// 生成对象 key：`{path}/{uuid}`。
+    fn build_object_key(path: &str, _filename: Option<&str>) -> Result<ObjectKey, ApplicationError> {
         let path = path.trim_matches('/');
-        let ext = filename.and_then(Self::normalized_extension);
-
-        let mut key = format!("{path}/{}", Uuid::new_v4());
-        if let Some(ext) = ext {
-            key.push('.');
-            key.push_str(ext);
-        }
-
+        let key = format!("{path}/{}", Uuid::new_v4());
         ObjectKey::new(key).map_err(ApplicationError::from)
-    }
-
-    /// 从文件名提取并规范化扩展名，仅保留安全字符集合。
-    fn normalized_extension(filename: &str) -> Option<&str> {
-        let ext = Path::new(filename).extension()?.to_str()?;
-        if ext.is_empty() {
-            return None;
-        }
-        if ext
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
-        {
-            Some(ext)
-        } else {
-            None
-        }
     }
 }
 

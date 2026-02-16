@@ -7,5 +7,4 @@ pub mod storage;
 
 pub use config::*;
 pub use error::*;
-pub use service::*;
 pub use state::*;

@@ -19,7 +19,24 @@ pub struct ObjectKey(String);
 impl ObjectKey {
     pub fn new(raw: impl Into<String>) -> Result<Self, DomainError> {
         let value = raw.into();
-        validate_object_key(&value)?;
+
+        // 规则 1：key 不能为空，且长度不能超过 1024。
+        if value.is_empty() || value.len() > 1024 {
+            return Err(DomainError::InvalidObjectKey(value));
+        }
+        // 规则 2：禁止以 `/` 开头或结尾。
+        if value.starts_with('/') || value.ends_with('/') {
+            return Err(DomainError::InvalidObjectKey(value));
+        }
+        // 规则 3：禁止不规范分隔符。
+        if value.contains("..") || value.contains('\\') || value.contains("//") {
+            return Err(DomainError::InvalidObjectKey(value));
+        }
+        // 规则 4：禁止控制字符。
+        if value.chars().any(|ch| ch.is_control()) {
+            return Err(DomainError::InvalidObjectKey(value));
+        }
+
         Ok(Self(value))
     }
 
@@ -60,24 +77,4 @@ impl From<ObjectKey> for String {
     fn from(value: ObjectKey) -> Self {
         value.0
     }
-}
-
-fn validate_object_key(value: &str) -> Result<(), DomainError> {
-    if value.is_empty() || value.len() > 1024 {
-        return Err(DomainError::InvalidObjectKey(value.to_string()));
-    }
-
-    if value.starts_with('/') || value.ends_with('/') {
-        return Err(DomainError::InvalidObjectKey(value.to_string()));
-    }
-
-    if value.contains("..") || value.contains('\\') || value.contains("//") {
-        return Err(DomainError::InvalidObjectKey(value.to_string()));
-    }
-
-    if value.chars().any(|ch| ch.is_control()) {
-        return Err(DomainError::InvalidObjectKey(value.to_string()));
-    }
-
-    Ok(())
 }
