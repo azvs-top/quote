@@ -5,14 +5,15 @@ use crate::application::service::quote::{
     QuoteUpdateDraft, UpdateQuoteService,
 };
 use crate::application::service::template::{
-    BuildQuoteTemplateFilterService, RenderQuoteTemplateService,
+    BuildQuoteTemplateFilterService, RenderQuoteTemplateService, TemplateImageMode,
 };
 use crate::application::storage::StoragePayload;
 use crate::application::ApplicationState;
 use crate::domain::value::{Lang, ObjectKey};
 use clap::{Parser, Subcommand};
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
+use viuer::{Config as ViuerConfig, print as print_image};
 
 #[derive(Parser)]
 #[command(
@@ -63,6 +64,20 @@ struct GetArgs {
         help = "模板输出，例如 '{{.inline.zh}}\\n{{.inline.en}}'"
     )]
     format: Option<String>,
+    #[arg(
+        long = "image-ascii",
+        default_value_t = false,
+        conflicts_with = "image_view",
+        help = "模板中 $image 的输出模式使用 ascii"
+    )]
+    image_ascii: bool,
+    #[arg(
+        long = "image-view",
+        default_value_t = false,
+        conflicts_with = "image_ascii",
+        help = "模板中 $image 的输出模式使用 view（终端直出优先）"
+    )]
+    image_view: bool,
 }
 
 #[derive(clap::Args)]
@@ -79,6 +94,48 @@ struct ListArgs {
     limit: i64,
     #[arg(long = "format", help = "模板输出，例如 '{{.id}} {{.inline.en}}'")]
     format: Option<String>,
+    #[arg(
+        long = "image-ascii",
+        default_value_t = false,
+        conflicts_with = "image_view",
+        help = "模板中 $image 的输出模式使用 ascii"
+    )]
+    image_ascii: bool,
+    #[arg(
+        long = "image-view",
+        default_value_t = false,
+        conflicts_with = "image_ascii",
+        help = "模板中 $image 的输出模式使用 view（终端直出优先）"
+    )]
+    image_view: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+enum CliImageMode {
+    #[default]
+    Meta,
+    Ascii,
+    View,
+}
+
+impl From<CliImageMode> for TemplateImageMode {
+    fn from(value: CliImageMode) -> Self {
+        match value {
+            CliImageMode::Meta => TemplateImageMode::Meta,
+            CliImageMode::Ascii => TemplateImageMode::Ascii,
+            CliImageMode::View => TemplateImageMode::View,
+        }
+    }
+}
+
+fn resolve_image_mode(image_ascii: bool, image_view: bool) -> CliImageMode {
+    if image_view {
+        return CliImageMode::View;
+    }
+    if image_ascii {
+        return CliImageMode::Ascii;
+    }
+    CliImageMode::Meta
 }
 
 #[derive(clap::Args)]
@@ -207,12 +264,20 @@ pub async fn run(state: ApplicationState) -> anyhow::Result<()> {
 }
 
 async fn handle_get(state: &ApplicationState, args: GetArgs) -> anyhow::Result<()> {
-    let render_template_service = RenderQuoteTemplateService::new(state.storage_port.as_ref());
+    let image_mode = resolve_image_mode(args.image_ascii, args.image_view);
+    let render_template_service =
+        RenderQuoteTemplateService::new(state.storage_port.as_ref(), image_mode.into());
 
     if let Some(id) = args.id {
         let service = GetQuoteByIdService::new(state.quote_port.as_ref());
         let quote = service.execute(id).await?;
-        print_quote(&quote, args.format.as_deref(), &render_template_service).await?;
+        print_quote(
+            &quote,
+            args.format.as_deref(),
+            &render_template_service,
+            image_mode,
+        )
+        .await?;
         return Ok(());
     }
 
@@ -223,12 +288,20 @@ async fn handle_get(state: &ApplicationState, args: GetArgs) -> anyhow::Result<(
     };
     let service = GetRandomQuoteService::new(state.quote_port.as_ref());
     let quote = service.execute(filter).await?;
-    print_quote(&quote, args.format.as_deref(), &render_template_service).await?;
+    print_quote(
+        &quote,
+        args.format.as_deref(),
+        &render_template_service,
+        image_mode,
+    )
+    .await?;
     Ok(())
 }
 
 async fn handle_list(state: &ApplicationState, args: ListArgs) -> anyhow::Result<()> {
-    let render_template_service = RenderQuoteTemplateService::new(state.storage_port.as_ref());
+    let image_mode = resolve_image_mode(args.image_ascii, args.image_view);
+    let render_template_service =
+        RenderQuoteTemplateService::new(state.storage_port.as_ref(), image_mode.into());
 
     let page = args.page.max(1);
     let limit = args.limit.max(1);
@@ -241,7 +314,13 @@ async fn handle_list(state: &ApplicationState, args: ListArgs) -> anyhow::Result
     let service = ListQuoteService::new(state.quote_port.as_ref());
     let quotes = service.execute(query).await?;
 
-    print_quotes(&quotes, args.format.as_deref(), &render_template_service).await?;
+    print_quotes(
+        &quotes,
+        args.format.as_deref(),
+        &render_template_service,
+        image_mode,
+    )
+    .await?;
     Ok(())
 }
 
@@ -463,9 +542,18 @@ async fn print_quote(
     quote: &crate::domain::entity::Quote,
     format: Option<&str>,
     render_template_service: &RenderQuoteTemplateService<'_>,
+    image_mode: CliImageMode,
 ) -> anyhow::Result<()> {
     if let Some(raw) = format {
-        println!("{}", render_template_service.execute(quote, raw).await?);
+        if matches!(image_mode, CliImageMode::View) {
+            if let Some(target) = extract_single_image_target(raw) {
+                if try_print_image_view(render_template_service, quote, target).await? {
+                    return Ok(());
+                }
+            }
+        }
+        let rendered = render_template_service.execute(quote, raw).await?;
+        println!("{rendered}");
     } else {
         println!("{}", serde_json::to_string_pretty(quote)?);
     }
@@ -476,13 +564,78 @@ async fn print_quotes(
     quotes: &[crate::domain::entity::Quote],
     format: Option<&str>,
     render_template_service: &RenderQuoteTemplateService<'_>,
+    image_mode: CliImageMode,
 ) -> anyhow::Result<()> {
     if let Some(raw) = format {
         for quote in quotes {
-            println!("{}", render_template_service.execute(quote, raw).await?);
+            if matches!(image_mode, CliImageMode::View) {
+                if let Some(target) = extract_single_image_target(raw) {
+                    if try_print_image_view(render_template_service, quote, target).await? {
+                        continue;
+                    }
+                }
+            }
+            let rendered = render_template_service.execute(quote, raw).await?;
+            println!("{rendered}");
         }
     } else {
         println!("{}", serde_json::to_string_pretty(quotes)?);
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ImageTemplateTarget {
+    Index(usize),
+}
+
+fn extract_single_image_target(raw_template: &str) -> Option<ImageTemplateTarget> {
+    let expr = raw_template.trim();
+    if !expr.starts_with("{{") || !expr.ends_with("}}") {
+        return None;
+    }
+    let inner = expr[2..expr.len() - 2].trim();
+    let path = inner.strip_prefix('$')?;
+    let mut parts = path.split('.').filter(|v| !v.is_empty());
+    let head = parts.next()?;
+    if head != "image" {
+        return None;
+    }
+    let index_raw = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    index_raw.parse::<usize>().ok().map(ImageTemplateTarget::Index)
+}
+
+async fn try_print_image_view(
+    render_template_service: &RenderQuoteTemplateService<'_>,
+    quote: &crate::domain::entity::Quote,
+    target: ImageTemplateTarget,
+) -> anyhow::Result<bool> {
+    if !std::io::stdout().is_terminal() {
+        return Ok(false);
+    }
+
+    let cfg = ViuerConfig {
+        transparent: true,
+        ..Default::default()
+    };
+
+    let mut printed = false;
+    match target {
+        ImageTemplateTarget::Index(index) => {
+            let Some(bytes) = render_template_service.load_image_bytes(quote, index).await? else {
+                return Ok(false);
+            };
+            let Ok(img) = image::load_from_memory(&bytes) else {
+                return Ok(false);
+            };
+            if print_image(&img, &cfg).is_ok() {
+                printed = true;
+            }
+        }
+    }
+
+    Ok(printed)
 }

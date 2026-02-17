@@ -1,6 +1,6 @@
 [package]
 name = "azvs_quote"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 
 [[bin]]
@@ -50,3 +50,6 @@ aws-sdk-s3 = "1.122.0"
 log = "0.4.29"
 uuid = { version = "1.20.0", features = ["v4"] }
 state = "0.6.0"
+image = { version = "0.25.8", default-features = true }
+# 图片处理
+viuer = "0.11.0"

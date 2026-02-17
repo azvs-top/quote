@@ -106,9 +106,13 @@ region = "us-east-1"
   + `--id <id>` 按 id 获取，不带 id 则随机获取。
     + 随机模式下，指定模板，按照模板是否存在过滤。
   + `--format '{{.id}}'` 模板输出。
+  + `--image-ascii`：仅影响 `--format` 中的 `{{$image.<index>}}`，输出 ASCII 预览。
+  + `--image-view`：仅影响 `--format` 中的 `{{$image.<index>}}`，优先终端直出图片；失败自动回退。
 + `quote list`
   + `--page\--limit` 分页。
   + `--format '{{...}}'` 模板输出。
+  + `--image-ascii`：仅影响 `--format` 中的 `{{$image.<index>}}`，输出 ASCII 预览。
+  + `--image-view`：仅影响 `--format` 中的 `{{$image.<index>}}`，优先终端直出图片；失败自动回退。
 + `quote create` 除 remark 外，其余参数均可使用多次。（相同语言模块下的相同语言会被覆盖）
   + `--inline <lang> <text>`
   + `--external <lang> <file>`
@@ -130,3 +134,16 @@ region = "us-east-1"
     + `--markdown <lang> / --all-markdown`
     + `--image <object_key> / --all-image`
     + 必须确认：--yes/-y 或交互输入 yes
+
+### 模板表达式（--format）
++ `{{.path}}`：读取 Quote 字段。
+  + 例如：`{{.inline.en}}`、`{{.external.en}}`、`{{.markdown.zh}}`、`{{.image.0}}`
+  + `{{.external.en}} / {{.markdown.zh}} / {{.image.0}}` 返回对象 key（存储路径）。
++ `{{$path}}`：读取扩展对象内容/派生结果。
+  + `{{$external.en}}`：下载对象并输出文本内容。
+  + `{{$markdown.zh}}`：下载对象并输出 markdown 原文。
+  + `{{$image}}`：输出全部图片的 meta 数组（JSON 字符串）。
+  + `{{$image.0}}`：按图片模式输出第 0 张图片：
+    + 默认（无参数）：meta（格式、尺寸、大小）
+    + `--image-ascii`：ASCII 预览
+    + `--image-view`：终端直出图片（失败回退）
