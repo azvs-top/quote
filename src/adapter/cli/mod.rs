@@ -1,15 +1,16 @@
-use crate::application::quote::{QuoteFilter, QuoteQuery};
+use crate::application::quote::QuoteQuery;
 use crate::application::service::quote::{
     CreateQuoteService, DeleteQuoteService, GetQuoteByIdService, GetRandomQuoteService,
     ListQuoteService, PartialDeleteQuoteDraft, PartialDeleteQuoteService, QuoteCreateDraft,
     QuoteUpdateDraft, UpdateQuoteService,
 };
+use crate::application::service::template::{
+    BuildQuoteTemplateFilterService, RenderQuoteTemplateService,
+};
 use crate::application::storage::StoragePayload;
 use crate::application::ApplicationState;
 use crate::domain::value::{Lang, ObjectKey};
 use clap::{Parser, Subcommand};
-use serde_json::Value;
-use std::collections::HashSet;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
@@ -206,27 +207,29 @@ pub async fn run(state: ApplicationState) -> anyhow::Result<()> {
 }
 
 async fn handle_get(state: &ApplicationState, args: GetArgs) -> anyhow::Result<()> {
+    let render_template_service = RenderQuoteTemplateService::new(state.storage_port.as_ref());
+
     if let Some(id) = args.id {
         let service = GetQuoteByIdService::new(state.quote_port.as_ref());
         let quote = service.execute(id).await?;
-        print_quote(&quote, args.format.as_deref())?;
+        print_quote(&quote, args.format.as_deref(), &render_template_service).await?;
         return Ok(());
     }
 
     let filter = if let Some(raw) = args.format.as_deref() {
-        let tpl = unescape_template(raw);
-        validate_template(&tpl)?;
-        build_filter_from_template(&tpl)?
+        BuildQuoteTemplateFilterService::execute(raw)?
     } else {
         None
     };
     let service = GetRandomQuoteService::new(state.quote_port.as_ref());
     let quote = service.execute(filter).await?;
-    print_quote(&quote, args.format.as_deref())?;
+    print_quote(&quote, args.format.as_deref(), &render_template_service).await?;
     Ok(())
 }
 
 async fn handle_list(state: &ApplicationState, args: ListArgs) -> anyhow::Result<()> {
+    let render_template_service = RenderQuoteTemplateService::new(state.storage_port.as_ref());
+
     let page = args.page.max(1);
     let limit = args.limit.max(1);
     let offset = (page - 1) * limit;
@@ -238,7 +241,7 @@ async fn handle_list(state: &ApplicationState, args: ListArgs) -> anyhow::Result
     let service = ListQuoteService::new(state.quote_port.as_ref());
     let quotes = service.execute(query).await?;
 
-    print_quotes(&quotes, args.format.as_deref())?;
+    print_quotes(&quotes, args.format.as_deref(), &render_template_service).await?;
     Ok(())
 }
 
@@ -456,204 +459,30 @@ fn confirm_yes(prompt: &str) -> anyhow::Result<bool> {
     Ok(value == "yes" || value == "y")
 }
 
-fn print_quote(quote: &crate::domain::entity::Quote, format: Option<&str>) -> anyhow::Result<()> {
+async fn print_quote(
+    quote: &crate::domain::entity::Quote,
+    format: Option<&str>,
+    render_template_service: &RenderQuoteTemplateService<'_>,
+) -> anyhow::Result<()> {
     if let Some(raw) = format {
-        let tpl = unescape_template(raw);
-        validate_template(&tpl)?;
-        let value = serde_json::to_value(quote)?;
-        println!("{}", render_template(&tpl, &value));
+        println!("{}", render_template_service.execute(quote, raw).await?);
     } else {
         println!("{}", serde_json::to_string_pretty(quote)?);
     }
     Ok(())
 }
 
-fn print_quotes(quotes: &[crate::domain::entity::Quote], format: Option<&str>) -> anyhow::Result<()> {
+async fn print_quotes(
+    quotes: &[crate::domain::entity::Quote],
+    format: Option<&str>,
+    render_template_service: &RenderQuoteTemplateService<'_>,
+) -> anyhow::Result<()> {
     if let Some(raw) = format {
-        let tpl = unescape_template(raw);
-        validate_template(&tpl)?;
         for quote in quotes {
-            let value = serde_json::to_value(quote)?;
-            println!("{}", render_template(&tpl, &value));
+            println!("{}", render_template_service.execute(quote, raw).await?);
         }
     } else {
         println!("{}", serde_json::to_string_pretty(quotes)?);
     }
     Ok(())
-}
-
-fn validate_template(template: &str) -> anyhow::Result<()> {
-    if !template.contains("{{") || !template.contains("}}") {
-        anyhow::bail!("--format only accepts template strings like '{{.inline.en}}'");
-    }
-    Ok(())
-}
-
-fn render_template(template: &str, root: &Value) -> String {
-    let mut out = String::new();
-    let mut cursor = 0usize;
-
-    loop {
-        let remain = &template[cursor..];
-        let Some(start_rel) = remain.find("{{.") else {
-            out.push_str(remain);
-            break;
-        };
-        let start = cursor + start_rel;
-        out.push_str(&template[cursor..start]);
-
-        let after_start = start + 3;
-        let Some(end_rel) = template[after_start..].find("}}") else {
-            out.push_str(&template[start..]);
-            break;
-        };
-        let end = after_start + end_rel;
-
-        let key = template[after_start..end].trim();
-        out.push_str(&lookup_template_key(root, key));
-
-        cursor = end + 2;
-    }
-
-    out
-}
-
-fn extract_template_keys(template: &str) -> Vec<String> {
-    let mut keys = Vec::new();
-    let mut cursor = 0usize;
-
-    loop {
-        let remain = &template[cursor..];
-        let Some(start_rel) = remain.find("{{.") else {
-            break;
-        };
-        let start = cursor + start_rel;
-        let after_start = start + 3;
-        let Some(end_rel) = template[after_start..].find("}}") else {
-            break;
-        };
-        let end = after_start + end_rel;
-        let key = template[after_start..end].trim();
-        if !key.is_empty() {
-            keys.push(key.to_string());
-        }
-        cursor = end + 2;
-    }
-
-    keys
-}
-
-fn build_filter_from_template(template: &str) -> anyhow::Result<Option<QuoteFilter>> {
-    let keys = extract_template_keys(template);
-    if keys.is_empty() {
-        return Ok(None);
-    }
-
-    let mut inline_all: HashSet<Lang> = HashSet::new();
-    let mut external_all: HashSet<Lang> = HashSet::new();
-    let mut markdown_all: HashSet<Lang> = HashSet::new();
-    let mut image_exists = false;
-
-    for key in keys {
-        let mut parts = key.split('.');
-        let Some(head) = parts.next() else {
-            continue;
-        };
-        let second = parts.next();
-
-        match head {
-            "inline" => {
-                if let Some(lang) = second {
-                    inline_all.insert(Lang::new(lang.to_string())?);
-                }
-            }
-            "external" => {
-                if let Some(lang) = second {
-                    external_all.insert(Lang::new(lang.to_string())?);
-                }
-            }
-            "markdown" => {
-                if let Some(lang) = second {
-                    markdown_all.insert(Lang::new(lang.to_string())?);
-                }
-            }
-            // `{{.image}}` / `{{.image.0}}` 都要求至少有 image。
-            "image" => image_exists = true,
-            _ => {}
-        }
-    }
-
-    if inline_all.is_empty() && external_all.is_empty() && markdown_all.is_empty() && !image_exists
-    {
-        return Ok(None);
-    }
-
-    let mut filter = QuoteFilter::default();
-    filter.inline_all = inline_all.into_iter().collect();
-    filter.external_all = external_all.into_iter().collect();
-    filter.markdown_all = markdown_all.into_iter().collect();
-    if image_exists {
-        filter.image_exists = Some(true);
-    }
-    Ok(Some(filter))
-}
-
-fn lookup_template_key(root: &Value, key: &str) -> String {
-    let mut current = root;
-    for segment in key.split('.').filter(|s| !s.is_empty()) {
-        match current {
-            Value::Object(map) => {
-                let Some(next) = map.get(segment) else {
-                    return String::new();
-                };
-                current = next;
-            }
-            Value::Array(arr) => {
-                let Ok(idx) = segment.parse::<usize>() else {
-                    return String::new();
-                };
-                let Some(next) = arr.get(idx) else {
-                    return String::new();
-                };
-                current = next;
-            }
-            _ => return String::new(),
-        }
-    }
-
-    match current {
-        Value::Null => String::new(),
-        Value::Bool(v) => v.to_string(),
-        Value::Number(v) => v.to_string(),
-        Value::String(v) => v.clone(),
-        _ => current.to_string(),
-    }
-}
-
-fn unescape_template(raw: &str) -> String {
-    let mut out = String::with_capacity(raw.len());
-    let mut chars = raw.chars();
-
-    while let Some(ch) = chars.next() {
-        if ch != '\\' {
-            out.push(ch);
-            continue;
-        }
-
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('r') => out.push('\r'),
-            Some('t') => out.push('\t'),
-            Some('\\') => out.push('\\'),
-            Some('"') => out.push('"'),
-            Some('\'') => out.push('\''),
-            Some(other) => {
-                out.push('\\');
-                out.push(other);
-            }
-            None => out.push('\\'),
-        }
-    }
-
-    out
 }
