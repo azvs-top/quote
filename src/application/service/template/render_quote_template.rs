@@ -316,3 +316,131 @@ fn lookup_template_key(root: &Value, key: &str) -> String {
         _ => current.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{RenderQuoteTemplateService, TemplateImageMode};
+    use crate::application::storage::{StoragePayload, StoragePort};
+    use crate::application::ApplicationError;
+    use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
+    use crate::domain::value::{Lang, ObjectKey};
+    use async_trait::async_trait;
+    use std::collections::HashMap;
+
+    struct FakeStorage {
+        objects: HashMap<String, Vec<u8>>,
+    }
+
+    impl FakeStorage {
+        fn new(objects: HashMap<String, Vec<u8>>) -> Self {
+            Self { objects }
+        }
+    }
+
+    #[async_trait]
+    impl StoragePort for FakeStorage {
+        async fn upload(
+            &self,
+            _path: &str,
+            _payload: StoragePayload,
+            _content_type: &str,
+        ) -> Result<ObjectKey, ApplicationError> {
+            Err(ApplicationError::Dependency("not implemented in fake".to_string()))
+        }
+
+        async fn delete(&self, _key: &ObjectKey) -> Result<(), ApplicationError> {
+            Ok(())
+        }
+
+        async fn exists(&self, key: &ObjectKey) -> Result<bool, ApplicationError> {
+            Ok(self.objects.contains_key(key.as_str()))
+        }
+
+        async fn download(&self, key: &ObjectKey) -> Result<Vec<u8>, ApplicationError> {
+            self.objects
+                .get(key.as_str())
+                .cloned()
+                .ok_or_else(|| ApplicationError::NotFound(format!("missing: {}", key.as_str())))
+        }
+    }
+
+    fn tiny_png_bytes() -> Vec<u8> {
+        vec![
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 15,
+            4, 0, 9, 251, 3, 253, 160, 43, 77, 132, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+        ]
+    }
+
+    fn build_quote() -> Quote {
+        let mut inline = MultiLangText::new();
+        inline.insert(Lang::new("en").expect("valid lang"), "hello".to_string());
+
+        let mut external = MultiLangObject::new();
+        external.insert(
+            Lang::new("en").expect("valid lang"),
+            ObjectKey::new("text/en/ext").expect("valid key"),
+        );
+
+        let mut markdown = MultiLangObject::new();
+        markdown.insert(
+            Lang::new("zh").expect("valid lang"),
+            ObjectKey::new("markdown/zh/doc").expect("valid key"),
+        );
+
+        let image = vec![ObjectKey::new("image/0").expect("valid key")];
+
+        Quote::new(1, inline, external, markdown, image, None).expect("valid quote")
+    }
+
+    #[tokio::test]
+    async fn render_supports_dot_and_dollar_text_fields() {
+        let mut objects = HashMap::new();
+        objects.insert("text/en/ext".to_string(), b"external-content".to_vec());
+        objects.insert("markdown/zh/doc".to_string(), b"# title".to_vec());
+        objects.insert("image/0".to_string(), tiny_png_bytes());
+
+        let storage = FakeStorage::new(objects);
+        let service = RenderQuoteTemplateService::new(&storage, TemplateImageMode::Meta);
+        let quote = build_quote();
+
+        let got = service
+            .execute(
+                &quote,
+                "{{.external.en}}|{{$external.en}}|{{$markdown.zh}}|{{.inline.en}}",
+            )
+            .await
+            .expect("render should succeed");
+
+        assert!(got.contains("text/en/ext"));
+        assert!(got.contains("external-content"));
+        assert!(got.contains("# title"));
+        assert!(got.contains("hello"));
+    }
+
+    #[tokio::test]
+    async fn render_image_meta_for_single_and_all() {
+        let mut objects = HashMap::new();
+        objects.insert("text/en/ext".to_string(), b"external-content".to_vec());
+        objects.insert("markdown/zh/doc".to_string(), b"# title".to_vec());
+        objects.insert("image/0".to_string(), tiny_png_bytes());
+
+        let storage = FakeStorage::new(objects);
+        let quote = build_quote();
+        let service = RenderQuoteTemplateService::new(&storage, TemplateImageMode::Meta);
+
+        let single = service
+            .execute(&quote, "{{$image.0}}")
+            .await
+            .expect("single image meta should render");
+        assert!(single.contains("PNG"));
+        assert!(single.contains('('));
+
+        let all = service
+            .execute(&quote, "{{$image}}")
+            .await
+            .expect("all image meta should render");
+        assert!(all.starts_with('['));
+        assert!(all.contains("PNG"));
+    }
+}

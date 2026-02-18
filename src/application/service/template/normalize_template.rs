@@ -50,3 +50,22 @@ fn unescape_template(raw: &str) -> String {
 
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::NormalizeTemplateService;
+    use crate::application::ApplicationError;
+
+    #[test]
+    fn normalize_rejects_non_template_input() {
+        let result = NormalizeTemplateService::execute("plain text");
+        assert!(matches!(result, Err(ApplicationError::InvalidInput(_))));
+    }
+
+    #[test]
+    fn normalize_unescapes_common_sequences() {
+        let input = "{{.inline.en}}\\nline2\\t\\\"q\\\"\\\\";
+        let result = NormalizeTemplateService::execute(input).expect("should normalize");
+        assert_eq!(result, "{{.inline.en}}\nline2\t\"q\"\\");
+    }
+}

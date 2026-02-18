@@ -109,3 +109,29 @@ fn extract_template_exprs(template: &str) -> Vec<String> {
 
     exprs
 }
+
+#[cfg(test)]
+mod tests {
+    use super::BuildQuoteTemplateFilterService;
+
+    #[test]
+    fn build_filter_returns_none_when_no_supported_expr() {
+        let result = BuildQuoteTemplateFilterService::execute("{{.id}}")
+            .expect("filter build should not fail");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn build_filter_collects_lang_requirements_from_dot_and_dollar_expr() {
+        let filter = BuildQuoteTemplateFilterService::execute(
+            "{{.inline.en}} {{$external.zh}} {{.markdown.ja}} {{.image.0}}",
+        )
+        .expect("filter build should succeed")
+        .expect("filter should be present");
+
+        assert!(filter.inline_all.iter().any(|lang| lang.as_str() == "en"));
+        assert!(filter.external_all.iter().any(|lang| lang.as_str() == "zh"));
+        assert!(filter.markdown_all.iter().any(|lang| lang.as_str() == "ja"));
+        assert_eq!(filter.image_exists, Some(true));
+    }
+}
