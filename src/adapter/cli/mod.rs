@@ -1,3 +1,4 @@
+use crate::application::ApplicationState;
 use crate::application::quote::QuoteQuery;
 use crate::application::service::quote::{
     CreateQuoteService, DeleteQuoteService, GetQuoteByIdService, GetRandomQuoteService,
@@ -8,7 +9,6 @@ use crate::application::service::template::{
     BuildQuoteTemplateFilterService, RenderQuoteTemplateService, TemplateImageMode,
 };
 use crate::application::storage::StoragePayload;
-use crate::application::ApplicationState;
 use crate::domain::value::{Lang, ObjectKey};
 use clap::{Parser, Subcommand};
 use std::io::{self, IsTerminal, Write};
@@ -20,7 +20,7 @@ use viuer::{Config as ViuerConfig, print as print_image};
     name = "quote",
     version,
     about = "Quote 命令行工具",
-    long_about = "管理 quote 的命令行工具，支持 get/list/create/update/delete。",
+    long_about = "管理 quote 的命令行工具，支持 get/list/create/update/delete/download。",
     after_help = r#"示例:
   quote get
   quote get --id 1
@@ -28,7 +28,8 @@ use viuer::{Config as ViuerConfig, print as print_image};
   quote list --page 1 --limit 20 --format '{{.id}}\t{{.inline.en}}'
   quote create --inline en "hello" --inline zh "你好" --image ./a.png
   quote update --id 1 --markdown zh ./a.md -y
-  quote delete --id 1 -y"#
+  quote delete --id 1 -y
+  quote download --id 1 --external en --out ./en.txt"#
 )]
 struct Cli {
     #[command(subcommand)]
@@ -47,15 +48,15 @@ enum Command {
     Update(UpdateArgs),
     /// 删除 quote（整条或部分字段）
     Delete(DeleteArgs),
+    /// 下载 quote 关联对象（external/markdown/image）
+    Download(DownloadArgs),
 }
 
 #[derive(clap::Args)]
-#[command(
-    after_help = r#"示例:
+#[command(after_help = r#"示例:
   quote get
   quote get --id 3
-  quote get --format '{{.inline.zh}}\n{{.inline.en}}'"#
-)]
+  quote get --format '{{.inline.zh}}\n{{.inline.en}}'"#)]
 struct GetArgs {
     #[arg(long = "id", help = "按 id 获取；未指定时为随机获取")]
     id: Option<i64>,
@@ -81,12 +82,10 @@ struct GetArgs {
 }
 
 #[derive(clap::Args)]
-#[command(
-    after_help = r#"示例:
+#[command(after_help = r#"示例:
   quote list
   quote list --page 2 --limit 5
-  quote list --format '{{.id}} {{.inline.en}}'"#
-)]
+  quote list --format '{{.id}} {{.inline.en}}'"#)]
 struct ListArgs {
     #[arg(long = "page", default_value_t = 1, help = "页码（从 1 开始）")]
     page: i64,
@@ -128,6 +127,15 @@ impl From<CliImageMode> for TemplateImageMode {
     }
 }
 
+/// 将 CLI 层图片参数映射为统一图片渲染模式。
+///
+/// 规则：
+/// - `--image-view` 优先级最高。
+/// - 其次是 `--image-ascii`。
+/// - 两者都未指定时回退为默认 `meta`。
+///
+/// 说明：
+/// - 该函数属于 adapter 层参数适配，避免将 cli 参数语义泄漏到 application 层。
 fn resolve_image_mode(image_ascii: bool, image_view: bool) -> CliImageMode {
     if image_view {
         return CliImageMode::View;
@@ -139,12 +147,10 @@ fn resolve_image_mode(image_ascii: bool, image_view: bool) -> CliImageMode {
 }
 
 #[derive(clap::Args)]
-#[command(
-    after_help = r#"示例:
+#[command(after_help = r#"示例:
   quote create --inline en "hello" --inline zh "你好"
   quote create --external en ./en.txt --markdown zh ./zh.md
-  quote create --image ./a.png --image ./b.jpg --remark "demo""#
-)]
+  quote create --image ./a.png --image ./b.jpg --remark "demo""#)]
 struct CreateArgs {
     #[arg(
         long = "inline",
@@ -174,13 +180,11 @@ struct CreateArgs {
 }
 
 #[derive(clap::Args)]
-#[command(
-    after_help = r#"示例:
+#[command(after_help = r#"示例:
   quote update --id 1 --inline en "hello" -y
   quote update --id 1 --markdown zh ./zh.md --image ./a.png -y
   quote update --id 1 --remark "new" -y
-  quote update --id 1 --clear-remark -y"#
-)]
+  quote update --id 1 --clear-remark -y"#)]
 struct UpdateArgs {
     #[arg(long = "id", help = "目标 quote id")]
     id: i64,
@@ -207,27 +211,26 @@ struct UpdateArgs {
     markdown: Vec<String>,
     #[arg(long = "image", help = "追加图片（可重复）")]
     image: Vec<PathBuf>,
-    #[arg(
-        long = "remark",
-        conflicts_with = "clear_remark",
-        help = "设置 remark"
-    )]
+    #[arg(long = "remark", conflicts_with = "clear_remark", help = "设置 remark")]
     remark: Option<String>,
     #[arg(long = "clear-remark", default_value_t = false, help = "清空 remark")]
     clear_remark: bool,
-    #[arg(long = "yes", short = 'y', default_value_t = false, help = "跳过二次确认")]
+    #[arg(
+        long = "yes",
+        short = 'y',
+        default_value_t = false,
+        help = "跳过二次确认"
+    )]
     yes: bool,
 }
 
 #[derive(clap::Args)]
-#[command(
-    after_help = r#"示例:
+#[command(after_help = r#"示例:
   quote delete --id 1 -y
   quote delete --id 1 --markdown zh -y
   quote delete --id 1 --all-inline -y
   quote delete --id 1 --image object/key.png -y
-  quote delete --id 1 --all-image -y"#
-)]
+  quote delete --id 1 --all-image -y"#)]
 struct DeleteArgs {
     #[arg(long = "id", help = "目标 quote id")]
     id: i64,
@@ -237,18 +240,55 @@ struct DeleteArgs {
     all_inline: bool,
     #[arg(long = "external", help = "删除指定 external 语言（可重复）")]
     external: Vec<String>,
-    #[arg(long = "all-external", default_value_t = false, help = "删除所有 external")]
+    #[arg(
+        long = "all-external",
+        default_value_t = false,
+        help = "删除所有 external"
+    )]
     all_external: bool,
     #[arg(long = "markdown", help = "删除指定 markdown 语言（可重复）")]
     markdown: Vec<String>,
-    #[arg(long = "all-markdown", default_value_t = false, help = "删除所有 markdown")]
+    #[arg(
+        long = "all-markdown",
+        default_value_t = false,
+        help = "删除所有 markdown"
+    )]
     all_markdown: bool,
     #[arg(long = "image", help = "按对象 key 删除图片（可重复）")]
     image: Vec<String>,
     #[arg(long = "all-image", default_value_t = false, help = "删除所有图片")]
     all_image: bool,
-    #[arg(long = "yes", short = 'y', default_value_t = false, help = "跳过二次确认")]
+    #[arg(
+        long = "yes",
+        short = 'y',
+        default_value_t = false,
+        help = "跳过二次确认"
+    )]
     yes: bool,
+}
+
+#[derive(clap::Args)]
+#[command(after_help = r#"示例:
+  quote download --id 1 --external en --out ./en.txt
+  quote download --id 1 --markdown zh --out ./zh.md
+  quote download --id 1 --image 0 --out ./0.bin"#)]
+struct DownloadArgs {
+    #[arg(long = "id", help = "目标 quote id")]
+    id: i64,
+    #[arg(
+        long = "external",
+        help = "下载 external 指定语言对象（当前仅支持单个）"
+    )]
+    external: Option<String>,
+    #[arg(
+        long = "markdown",
+        help = "下载 markdown 指定语言对象（当前仅支持单个）"
+    )]
+    markdown: Option<String>,
+    #[arg(long = "image", help = "下载 image 指定索引对象（当前仅支持单个）")]
+    image: Option<usize>,
+    #[arg(long = "out", help = "输出文件路径")]
+    out: PathBuf,
 }
 
 pub async fn run(state: ApplicationState) -> anyhow::Result<()> {
@@ -259,6 +299,7 @@ pub async fn run(state: ApplicationState) -> anyhow::Result<()> {
         Command::Create(args) => handle_create(&state, args).await?,
         Command::Update(args) => handle_update(&state, args).await?,
         Command::Delete(args) => handle_delete(&state, args).await?,
+        Command::Download(args) => handle_download(&state, args).await?,
     }
     Ok(())
 }
@@ -516,7 +557,8 @@ async fn handle_delete(state: &ApplicationState, args: DeleteArgs) -> anyhow::Re
             draft.image_keys.push(ObjectKey::new(key)?);
         }
 
-        let service = PartialDeleteQuoteService::new(state.quote_port.as_ref(), state.storage_port.as_ref());
+        let service =
+            PartialDeleteQuoteService::new(state.quote_port.as_ref(), state.storage_port.as_ref());
         let quote = service.execute(draft).await?;
         println!("{}", serde_json::to_string_pretty(&quote)?);
         return Ok(());
@@ -528,6 +570,54 @@ async fn handle_delete(state: &ApplicationState, args: DeleteArgs) -> anyhow::Re
     Ok(())
 }
 
+async fn handle_download(state: &ApplicationState, args: DownloadArgs) -> anyhow::Result<()> {
+    let selected_count = usize::from(args.external.is_some())
+        + usize::from(args.markdown.is_some())
+        + usize::from(args.image.is_some());
+    if selected_count != 1 {
+        anyhow::bail!("download requires exactly one target: --external, --markdown, or --image");
+    }
+
+    let service = GetQuoteByIdService::new(state.quote_port.as_ref());
+    let quote = service.execute(args.id).await?;
+
+    let key = if let Some(lang_raw) = args.external.as_deref() {
+        let lang = Lang::new(lang_raw.to_string())?;
+        quote
+            .external()
+            .get(&lang)
+            .ok_or_else(|| anyhow::anyhow!("external not found for lang={lang_raw}"))?
+    } else if let Some(lang_raw) = args.markdown.as_deref() {
+        let lang = Lang::new(lang_raw.to_string())?;
+        quote
+            .markdown()
+            .get(&lang)
+            .ok_or_else(|| anyhow::anyhow!("markdown not found for lang={lang_raw}"))?
+    } else if let Some(index) = args.image {
+        quote
+            .image()
+            .get(index)
+            .ok_or_else(|| anyhow::anyhow!("image not found for index={index}"))?
+    } else {
+        unreachable!("selected_count ensured one target");
+    };
+
+    let bytes = state.storage_port.download(key).await?;
+
+    if let Some(parent) = args.out.parent() {
+        if !parent.as_os_str().is_empty() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+    }
+    tokio::fs::write(&args.out, bytes).await?;
+
+    println!("downloaded {} -> {}", key.as_str(), args.out.display());
+    Ok(())
+}
+
+/// 在执行高风险操作（update/delete）前进行再次确认。
+///
+/// 仅当用户输入 `yes` 或 `y`（不区分大小写）时返回 `true`。
 fn confirm_yes(prompt: &str) -> anyhow::Result<bool> {
     print!("{prompt} type 'yes' to continue: ");
     io::stdout().flush()?;
@@ -589,6 +679,10 @@ enum ImageTemplateTarget {
     Index(usize),
 }
 
+/// 解析“仅包含一个模板表达式”的图片目标。
+///
+/// 支持格式：`{{$image.<index>}}`。
+/// 若模板包含额外文本、不是 `$image` 表达式、或索引非法，则返回 `None`。
 fn extract_single_image_target(raw_template: &str) -> Option<ImageTemplateTarget> {
     let expr = raw_template.trim();
     if !expr.starts_with("{{") || !expr.ends_with("}}") {
@@ -605,9 +699,18 @@ fn extract_single_image_target(raw_template: &str) -> Option<ImageTemplateTarget
     if parts.next().is_some() {
         return None;
     }
-    index_raw.parse::<usize>().ok().map(ImageTemplateTarget::Index)
+    index_raw
+        .parse::<usize>()
+        .ok()
+        .map(ImageTemplateTarget::Index)
 }
 
+/// 在 `view` 模式下尝试直接向终端输出图片。
+///
+/// 行为：
+/// - 非 TTY 场景直接返回 `Ok(false)`。
+/// - 仅处理单张图片目标（由 `extract_single_image_target` 保证）。
+/// - 终端直出失败时返回 `Ok(false)`，由上层回退到文本渲染。
 async fn try_print_image_view(
     render_template_service: &RenderQuoteTemplateService<'_>,
     quote: &crate::domain::entity::Quote,
@@ -625,7 +728,10 @@ async fn try_print_image_view(
     let mut printed = false;
     match target {
         ImageTemplateTarget::Index(index) => {
-            let Some(bytes) = render_template_service.load_image_bytes(quote, index).await? else {
+            let Some(bytes) = render_template_service
+                .load_image_bytes(quote, index)
+                .await?
+            else {
                 return Ok(false);
             };
             let Ok(img) = image::load_from_memory(&bytes) else {
