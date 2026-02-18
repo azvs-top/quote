@@ -1,17 +1,26 @@
 # azvs_quote
 
-## 开发手册
+`azvs_quote` 是一个基于 DDD 分层的 Quote 管理工具，当前主入口是 CLI（`quote`），支持：
+- quote 数据 CRUD
+- MinIO 对象上传/下载（external/markdown/image）
+- `--format` 模板渲染（`.path` 与 `$path`）
+- 图片在终端中的 meta/ascii/view 三种输出模式
 
+当前版本：`0.2.1`
+
+## 常用发布命令
 ```bash
 git push origin master
 git push github master
 ```
 
+## 构建与测试
 ```bash
 cargo build --release
+cargo test
 ```
 
-### 架构视角（DDD架构）
+## 架构视角（DDD）
 ```mermaid
 flowchart TB
 
@@ -20,7 +29,7 @@ CLI[CLI]
 end
 
 subgraph Application
-APP[Application Service]
+APP[Application Services]
 end
 
 subgraph Domain
@@ -29,7 +38,7 @@ end
 
 subgraph Infrastructure
 QINFRA[Quote Repository Impl]
-SINFRA[Storage Service Impl]
+SINFRA[Storage Repository Impl]
 end
 
 subgraph External
@@ -45,105 +54,124 @@ QINFRA --> DB
 SINFRA --> OBJ
 ```
 
-### 启动装配流程（v0.2.0）
-```mermaid
-flowchart TD
-    A["bin/cli main()"] --> B["ApplicationState::new().await"]
-    B --> C["ApplicationConfig::load()"]
-    C --> D["validate_semantics()"]
+## 配置
+默认配置路径：
+- Linux: `~/.config/azvs/quote.toml`
+- macOS: `~/Library/Application Support/azvs/quote.toml`
+- Windows: `%APPDATA%\\azvs\\quote.toml`
 
-    D --> E{"database.backend"}
-    E -->|"postgres"| F["PgPoolOptions::connect(url)"]
-    F --> G["PostgresQuoteRepo::new(pool)"]
-    E -->|"mysql"| E1["返回未实现错误"]
+可通过环境变量覆盖配置文件路径：
+- `AZVS_QUOTE_CONFIG=/your/path/quote.toml`
 
-    D --> H{"storage.backend"}
-    H -->|"minio"| I["MinioStorageRepo::new(config).await"]
-    H -->|"file"| H1["返回未实现错误"]
-
-    G --> J["ApplicationState { quote_port, storage_port, config }"]
-    I --> J
-
-    J --> K["adapter::cli::run(state)"]
-    K --> L{"clap 子命令"}
-    L -->|"get/list/create/update/delete"| M["application services"]
-    M --> N["QuotePort trait"]
-    M --> O["StoragePort trait"]
-```
-
-## 配置文件(v0.2.0)
-> 默认读取：`~/.config/azvs/quote.toml`
+示例配置：
 ```toml
 [database]
-backend = "postgres" # postgres | mysql
+backend = "postgres" # postgres | mysql(未实现)
 
 [database.postgres]
-url = "postgres://azvs:azvs@azvs.lan:5432/azvs"
+url = "postgres://azvs:azvs@127.0.0.1:5432/azvs"
 max_connections = 10
 min_connections = 0
 
-[database.mysql]
-# todo
-# url = "mysql://..."
-
 [storage]
-backend = "minio" # minio | file
+backend = "minio" # minio | file(未实现)
 
 [storage.minio]
-endpoint = "https://minio.azvs.com"
+endpoint = "https://minio.example.com"
 access_key = "username"
 secret_key = "password"
 bucket = "quote"
 region = "us-east-1"
+secure = true
 
-[storage.file]
-# todo
-# root = "/data/quote"
+[cli.format]
+default_get = "{{.inline.en}}\n{{.inline.zh}}"
+default_list = "{{.id}}\t{{.inline.en}}"
+image_mode = "meta" # meta | ascii | view
+
+[cli.format.presets]
+brief = "{{.id}}: {{.inline.en}}"
+full = "{{}}"
 ```
 
-## Quote-CLI
-+ `quote get`
-  + `--id <id>` 按 id 获取，不带 id 则随机获取。
-    + 随机模式下，指定模板，按照模板是否存在过滤。
-  + `--format '{{.id}}'` 模板输出。
-  + `--image-ascii`：仅影响 `--format` 中的 `{{$image.<index>}}`，输出 ASCII 预览。
-  + `--image-view`：仅影响 `--format` 中的 `{{$image.<index>}}`，优先终端直出图片；失败自动回退。
-+ `quote list`
-  + `--page\--limit` 分页。
-  + `--format '{{...}}'` 模板输出。
-  + `--image-ascii`：仅影响 `--format` 中的 `{{$image.<index>}}`，输出 ASCII 预览。
-  + `--image-view`：仅影响 `--format` 中的 `{{$image.<index>}}`，优先终端直出图片；失败自动回退。
-+ `quote create` 除 remark 外，其余参数均可使用多次。（相同语言模块下的相同语言会被覆盖）
-  + `--inline <lang> <text>`
-  + `--external <lang> <file>`
-  + `--markdown <lang> <file>`
-  + `--image <file>`
-  + `--remark <text>`
-+ `quote update`
-  + `--id <id>` 必填
-  + 参数风格与 create 一致
-  + `--remark / --clear-remark`
-  + 必须确认：--yes/-y 或交互输入 yes
-  + 同一模块，多语言字段按语言粒度覆盖
-  + image 为追加语义
-+ `quote delete`
-  + 整条删除：仅传 `--id <id>`
-  + 部分删除:
-    + `--inline <lang> / --all-inline`
-    + `--external <lang> / --all-external`
-    + `--markdown <lang> / --all-markdown`
-    + `--image <object_key> / --all-image`
-    + 必须确认：--yes/-y 或交互输入 yes
+`--format` 选择优先级：
+1. 命令行 `--format`
+2. 命令行 `--format-preset`
+3. `quote.toml` 中 `default_get/default_list`
+4. 都未提供时输出 JSON
 
-### 模板表达式（--format）
-+ `{{.path}}`：读取 Quote 字段。
-  + 例如：`{{.inline.en}}`、`{{.external.en}}`、`{{.markdown.zh}}`、`{{.image.0}}`
-  + `{{.external.en}} / {{.markdown.zh}} / {{.image.0}}` 返回对象 key（存储路径）。
-+ `{{$path}}`：读取扩展对象内容/派生结果。
-  + `{{$external.en}}`：下载对象并输出文本内容。
-  + `{{$markdown.zh}}`：下载对象并输出 markdown 原文。
-  + `{{$image}}`：输出全部图片的 meta 数组（JSON 字符串）。
-  + `{{$image.0}}`：按图片模式输出第 0 张图片：
-    + 默认（无参数）：meta（格式、尺寸、大小）
-    + `--image-ascii`：ASCII 预览
-    + `--image-view`：终端直出图片（失败回退）
+## CLI 命令
+`quote get`
+- `--id <id>`：按 id 获取；未指定则随机获取
+- `--format <tpl>` / `--format-preset <name>`
+- `--image-ascii`：仅影响模板中的 `{{$image.<index>}}`
+- `--image-view`：仅影响模板中的 `{{$image.<index>}}`，优先终端直出，失败回退
+
+`quote list`
+- `--page <n> --limit <n>`
+- `--format <tpl>` / `--format-preset <name>`
+- `--image-ascii`
+- `--image-view`
+
+`quote create`
+- `--inline <lang> <text>`（可重复）
+- `--external <lang> <file>`（可重复）
+- `--markdown <lang> <file>`（可重复）
+- `--image <file>`（可重复）
+- `--remark <text>`
+
+`quote update`
+- `--id <id>` 必填
+- 其余参数与 `create` 风格一致
+- `--remark <text>` 或 `--clear-remark`
+- 默认二次确认；可用 `-y/--yes` 跳过
+
+`quote delete`
+- 整条删除：`quote delete --id <id> -y`
+- 部分删除：
+- `--inline <lang>` / `--all-inline`
+- `--external <lang>` / `--all-external`
+- `--markdown <lang>` / `--all-markdown`
+- `--image <object_key>` / `--all-image`
+- 默认二次确认；可用 `-y/--yes` 跳过
+
+`quote download`
+- `--id <id>` + 严格三选一目标：
+- `--external <lang>` 或 `--markdown <lang>` 或 `--image <index>`
+- `--out <path>` 输出文件路径（父目录不存在会自动创建）
+
+## `--format` 模板语法
+`{{.path}}`：读取 Quote 字段（不会下载对象）
+- `{{.id}}`
+- `{{.inline.en}}`
+- `{{.external.en}}`（返回对象 key）
+- `{{.markdown.zh}}`（返回对象 key）
+- `{{.image.0}}`（返回对象 key）
+
+`{{$path}}`：读取扩展对象内容或派生结果（会访问存储）
+- `{{$external.en}}`：下载并输出文本
+- `{{$markdown.zh}}`：下载并输出 markdown 原文
+- `{{$image}}`：输出全部图片 meta 数组（JSON 字符串）
+- `{{$image.0}}`：输出单张图片，模式受 `image_mode/--image-ascii/--image-view` 影响
+
+模板字符串支持常见转义：
+- `\n` `\t` `\r` `\\` `\"` `\'`
+
+## 使用示例
+```bash
+quote get --id 1
+quote get --format '{{.inline.zh}}\n{{.inline.en}}'
+quote get --format '{{$external.en}}'
+quote get --format '{{$image.0}}' --image-ascii
+
+quote list --page 1 --limit 20 --format '{{.id}}\t{{.inline.en}}'
+quote list --format-preset brief
+
+quote create --inline en "hello" --inline zh "你好" --remark "demo"
+quote update --id 1 --markdown zh ./a.md -y
+quote delete --id 1 --all-markdown -y
+
+quote download --id 1 --external en --out ./en.txt
+quote download --id 1 --markdown zh --out ./zh.md
+quote download --id 1 --image 0 --out ./0.bin
+```

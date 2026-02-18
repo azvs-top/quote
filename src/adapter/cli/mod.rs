@@ -1,4 +1,4 @@
-use crate::application::ApplicationState;
+use crate::application::{ApplicationState, CliImageMode};
 use crate::application::quote::QuoteQuery;
 use crate::application::service::quote::{
     CreateQuoteService, DeleteQuoteService, GetQuoteByIdService, GetRandomQuoteService,
@@ -11,6 +11,7 @@ use crate::application::service::template::{
 use crate::application::storage::StoragePayload;
 use crate::domain::value::{Lang, ObjectKey};
 use clap::{Parser, Subcommand};
+use std::collections::HashMap;
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use viuer::{Config as ViuerConfig, print as print_image};
@@ -66,6 +67,12 @@ struct GetArgs {
     )]
     format: Option<String>,
     #[arg(
+        long = "format-preset",
+        conflicts_with = "format",
+        help = "使用配置文件 [cli.format.presets] 中的模板名称"
+    )]
+    format_preset: Option<String>,
+    #[arg(
         long = "image-ascii",
         default_value_t = false,
         conflicts_with = "image_view",
@@ -94,6 +101,12 @@ struct ListArgs {
     #[arg(long = "format", help = "模板输出，例如 '{{.id}} {{.inline.en}}'")]
     format: Option<String>,
     #[arg(
+        long = "format-preset",
+        conflicts_with = "format",
+        help = "使用配置文件 [cli.format.presets] 中的模板名称"
+    )]
+    format_preset: Option<String>,
+    #[arg(
         long = "image-ascii",
         default_value_t = false,
         conflicts_with = "image_view",
@@ -107,14 +120,6 @@ struct ListArgs {
         help = "模板中 $image 的输出模式使用 view（终端直出优先）"
     )]
     image_view: bool,
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-enum CliImageMode {
-    #[default]
-    Meta,
-    Ascii,
-    View,
 }
 
 impl From<CliImageMode> for TemplateImageMode {
@@ -136,14 +141,32 @@ impl From<CliImageMode> for TemplateImageMode {
 ///
 /// 说明：
 /// - 该函数属于 adapter 层参数适配，避免将 cli 参数语义泄漏到 application 层。
-fn resolve_image_mode(image_ascii: bool, image_view: bool) -> CliImageMode {
+fn resolve_image_mode(image_ascii: bool, image_view: bool, default_mode: CliImageMode) -> CliImageMode {
     if image_view {
         return CliImageMode::View;
     }
     if image_ascii {
         return CliImageMode::Ascii;
     }
-    CliImageMode::Meta
+    default_mode
+}
+
+fn resolve_effective_format(
+    format: Option<&str>,
+    preset: Option<&str>,
+    default_format: Option<&str>,
+    presets: &HashMap<String, String>,
+) -> anyhow::Result<Option<String>> {
+    if let Some(raw) = format {
+        return Ok(Some(raw.to_string()));
+    }
+    if let Some(preset_name) = preset {
+        let value = presets
+            .get(preset_name)
+            .ok_or_else(|| anyhow::anyhow!("unknown format preset: {preset_name}"))?;
+        return Ok(Some(value.clone()));
+    }
+    Ok(default_format.map(|v| v.to_string()))
 }
 
 #[derive(clap::Args)]
@@ -312,7 +335,18 @@ pub async fn run(state: ApplicationState) -> anyhow::Result<()> {
 }
 
 async fn handle_get(state: &ApplicationState, args: GetArgs) -> anyhow::Result<()> {
-    let image_mode = resolve_image_mode(args.image_ascii, args.image_view);
+    let cli_cfg = &state.config.cli.format;
+    let effective_format = resolve_effective_format(
+        args.format.as_deref(),
+        args.format_preset.as_deref(),
+        cli_cfg.default_get.as_deref(),
+        &cli_cfg.presets,
+    )?;
+    let image_mode = resolve_image_mode(
+        args.image_ascii,
+        args.image_view,
+        CliImageMode::from(cli_cfg.image_mode),
+    );
     let render_template_service =
         RenderQuoteTemplateService::new(state.storage_port.as_ref(), image_mode.into());
 
@@ -321,7 +355,7 @@ async fn handle_get(state: &ApplicationState, args: GetArgs) -> anyhow::Result<(
         let quote = service.execute(id).await?;
         print_quote(
             &quote,
-            args.format.as_deref(),
+            effective_format.as_deref(),
             &render_template_service,
             image_mode,
         )
@@ -329,7 +363,7 @@ async fn handle_get(state: &ApplicationState, args: GetArgs) -> anyhow::Result<(
         return Ok(());
     }
 
-    let filter = if let Some(raw) = args.format.as_deref() {
+    let filter = if let Some(raw) = effective_format.as_deref() {
         BuildQuoteTemplateFilterService::execute(raw)?
     } else {
         None
@@ -338,7 +372,7 @@ async fn handle_get(state: &ApplicationState, args: GetArgs) -> anyhow::Result<(
     let quote = service.execute(filter).await?;
     print_quote(
         &quote,
-        args.format.as_deref(),
+        effective_format.as_deref(),
         &render_template_service,
         image_mode,
     )
@@ -347,7 +381,18 @@ async fn handle_get(state: &ApplicationState, args: GetArgs) -> anyhow::Result<(
 }
 
 async fn handle_list(state: &ApplicationState, args: ListArgs) -> anyhow::Result<()> {
-    let image_mode = resolve_image_mode(args.image_ascii, args.image_view);
+    let cli_cfg = &state.config.cli.format;
+    let effective_format = resolve_effective_format(
+        args.format.as_deref(),
+        args.format_preset.as_deref(),
+        cli_cfg.default_list.as_deref(),
+        &cli_cfg.presets,
+    )?;
+    let image_mode = resolve_image_mode(
+        args.image_ascii,
+        args.image_view,
+        CliImageMode::from(cli_cfg.image_mode),
+    );
     let render_template_service =
         RenderQuoteTemplateService::new(state.storage_port.as_ref(), image_mode.into());
 
@@ -364,7 +409,7 @@ async fn handle_list(state: &ApplicationState, args: ListArgs) -> anyhow::Result
 
     print_quotes(
         &quotes,
-        args.format.as_deref(),
+        effective_format.as_deref(),
         &render_template_service,
         image_mode,
     )

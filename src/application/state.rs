@@ -5,6 +5,7 @@ use crate::application::ApplicationError;
 use crate::infra::{MinioStorageRepo, PostgresQuoteRepo};
 use serde::Deserialize;
 use sqlx::postgres::PgPoolOptions;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -13,6 +14,8 @@ pub struct ApplicationConfig {
     pub database: DatabaseConfig,
     #[serde(default)]
     pub storage: StorageConfig,
+    #[serde(default)]
+    pub cli: CliConfig,
 }
 
 impl ApplicationConfig {
@@ -166,6 +169,44 @@ fn default_region() -> String {
 pub struct FileStorageConfig {
     #[serde(default)]
     pub root: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct CliConfig {
+    #[serde(default)]
+    pub format: CliFormatConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CliFormatConfig {
+    #[serde(default)]
+    pub default_get: Option<String>,
+    #[serde(default)]
+    pub default_list: Option<String>,
+    #[serde(default)]
+    pub image_mode: CliImageMode,
+    #[serde(default)]
+    pub presets: HashMap<String, String>,
+}
+
+impl Default for CliFormatConfig {
+    fn default() -> Self {
+        Self {
+            default_get: None,
+            default_list: None,
+            image_mode: CliImageMode::Meta,
+            presets: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CliImageMode {
+    #[default]
+    Meta,
+    Ascii,
+    View,
 }
 
 #[derive(Clone)]
