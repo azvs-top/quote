@@ -101,6 +101,9 @@ full = "{{}}"
 4. 都未提供时输出 JSON
 
 ## CLI 命令
+
+> tip: 使用 `clap_complete` 实现允许 `<TAB>` 给出命令提示
+
 `quote get`
 - `--id <id>`：按 id 获取；未指定则随机获取
 - `--format <tpl>` / `--format-preset <name>`
@@ -132,7 +135,7 @@ full = "{{}}"
 - `--inline <lang>` / `--all-inline`
 - `--external <lang>` / `--all-external`
 - `--markdown <lang>` / `--all-markdown`
-- `--image <object_key>` / `--all-image`
+- `--image-key <object_key>` 或 `--image-index <index>` / `--all-image`
 - 默认二次确认；可用 `-y/--yes` 跳过
 
 `quote download`

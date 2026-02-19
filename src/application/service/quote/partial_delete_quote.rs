@@ -16,6 +16,7 @@ pub struct PartialDeleteQuoteDraft {
     pub markdown_langs: Vec<Lang>,
     pub clear_markdown: bool,
     pub image_keys: Vec<ObjectKey>,
+    pub image_indexes: Vec<usize>,
     pub clear_image: bool,
 }
 
@@ -100,13 +101,23 @@ impl<'a> PartialDeleteQuoteService<'a> {
             update.markdown = Some(markdown);
         }
 
-        if draft.clear_image || !draft.image_keys.is_empty() {
+        if draft.clear_image || !draft.image_keys.is_empty() || !draft.image_indexes.is_empty() {
             let mut image = current.image().to_vec();
             if draft.clear_image {
                 removed_object_keys.extend(image.iter().cloned());
                 image.clear();
             } else {
-                let remove_set: HashSet<&str> = draft.image_keys.iter().map(|k| k.as_str()).collect();
+                let mut resolved_image_keys = draft.image_keys.clone();
+                for index in &draft.image_indexes {
+                    let Some(key) = current.image().get(*index) else {
+                        return Err(ApplicationError::InvalidInput(format!(
+                            "image index out of range: {index}"
+                        )));
+                    };
+                    resolved_image_keys.push(key.clone());
+                }
+                let remove_set: HashSet<&str> =
+                    resolved_image_keys.iter().map(|k| k.as_str()).collect();
                 image.retain(|k| {
                     let should_remove = remove_set.contains(k.as_str());
                     if should_remove {
@@ -144,6 +155,7 @@ fn has_any_delete_action(draft: &PartialDeleteQuoteDraft) -> bool {
         || !draft.markdown_langs.is_empty()
         || draft.clear_image
         || !draft.image_keys.is_empty()
+        || !draft.image_indexes.is_empty()
 }
 
 fn dedup_object_keys(keys: Vec<ObjectKey>) -> Vec<ObjectKey> {
