@@ -106,6 +106,11 @@ impl<'a> RenderQuoteTemplateService<'a> {
             return Ok(value.unwrap_or_default());
         }
 
+        if let Some(width) = parse_id_width_expr(expr) {
+            let id_value = lookup_template_key(root, "id");
+            return Ok(pad_left_min_width(&id_value, width));
+        }
+
         let key = expr.strip_prefix('.').unwrap_or(expr);
         Ok(lookup_template_key(root, key))
     }
@@ -317,6 +322,19 @@ fn lookup_template_key(root: &Value, key: &str) -> String {
     }
 }
 
+fn parse_id_width_expr(expr: &str) -> Option<usize> {
+    let raw = expr.trim().strip_prefix('.').unwrap_or(expr.trim());
+    let width_raw = raw.strip_prefix("id(")?.strip_suffix(')')?;
+    width_raw.parse::<usize>().ok()
+}
+
+fn pad_left_min_width(value: &str, width: usize) -> String {
+    if value.is_empty() || width <= value.len() {
+        return value.to_string();
+    }
+    format!("{value:>width$}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::{RenderQuoteTemplateService, TemplateImageMode};
@@ -442,5 +460,24 @@ mod tests {
             .expect("all image meta should render");
         assert!(all.starts_with('['));
         assert!(all.contains("PNG"));
+    }
+
+    #[tokio::test]
+    async fn render_supports_id_width_expr() {
+        let mut objects = HashMap::new();
+        objects.insert("text/en/ext".to_string(), b"external-content".to_vec());
+        objects.insert("markdown/zh/doc".to_string(), b"# title".to_vec());
+        objects.insert("image/0".to_string(), tiny_png_bytes());
+
+        let storage = FakeStorage::new(objects);
+        let quote = build_quote();
+        let service = RenderQuoteTemplateService::new(&storage, TemplateImageMode::Meta);
+
+        let rendered = service
+            .execute(&quote, "{{.id(4)}}|{{id(3)}}|{{.id}}")
+            .await
+            .expect("id width render should succeed");
+
+        assert_eq!(rendered, "   1|  1|1");
     }
 }
