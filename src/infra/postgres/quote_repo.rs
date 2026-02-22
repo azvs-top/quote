@@ -15,9 +15,36 @@ impl PostgresQuoteRepo {
         Self { pool }
     }
 
-    /// 将底层依赖错误统一映射为 `ApplicationError::Dependency`。
-    fn map_dependency_error(err: impl std::fmt::Display) -> ApplicationError {
-        ApplicationError::Dependency(err.to_string())
+    /// 细粒度映射 sqlx 错误，保留业务语义（冲突/输入错误/依赖故障）。
+    fn map_sqlx_error(err: sqlx::Error, op: &str) -> ApplicationError {
+        match err {
+            sqlx::Error::Database(db_err) => {
+                let code = db_err
+                    .code()
+                    .map(|code| code.into_owned())
+                    .unwrap_or_else(|| "unknown".to_string());
+                let message = db_err.message();
+                match code.as_str() {
+                    // postgres unique_violation / mysql duplicate entry(sqlstate)
+                    "23505" | "23000" => {
+                        ApplicationError::Conflict(format!("{op} failed ({code}): {message}"))
+                    }
+                    // postgres not_null_violation / check_violation
+                    "23502" | "23514" => {
+                        ApplicationError::InvalidInput(format!("{op} failed ({code}): {message}"))
+                    }
+                    _ => ApplicationError::Dependency(format!("{op} failed ({code}): {message}")),
+                }
+            }
+            sqlx::Error::PoolTimedOut
+            | sqlx::Error::PoolClosed
+            | sqlx::Error::Io(_)
+            | sqlx::Error::Tls(_)
+            | sqlx::Error::Protocol(_) => {
+                ApplicationError::Dependency(format!("{op} failed: {err}"))
+            }
+            _ => ApplicationError::Dependency(format!("{op} failed: {err}")),
+        }
     }
 
     /// 将领域/应用结构序列化为 JSON 值，供 JSONB 字段写入。
@@ -236,7 +263,6 @@ impl QuotePort for PostgresQuoteRepo {
         let external = Self::serialize_json_value(&create.external, "external")?;
         let markdown = Self::serialize_json_value(&create.markdown, "markdown")?;
         let image = Self::serialize_json_value(&create.image, "image")?;
-
         let row = sqlx::query_as::<_, QuoteRow>(
             r#"
             INSERT INTO quote.quote (inline, external, markdown, image, remark)
@@ -251,9 +277,11 @@ impl QuotePort for PostgresQuoteRepo {
         .bind(create.remark)
         .fetch_one(&self.pool)
         .await
-        .map_err(Self::map_dependency_error)?;
+        .map_err(|err| Self::map_sqlx_error(err, "insert quote"))?;
 
-        Self::map_row_to_quote(row)
+        let quote = Self::map_row_to_quote(row)?;
+
+        Ok(quote)
     }
 
     async fn get(&self, query: QuoteQuery) -> Result<Quote, ApplicationError> {
@@ -278,7 +306,7 @@ impl QuotePort for PostgresQuoteRepo {
             .build_query_as::<QuoteRow>()
             .fetch_optional(&self.pool)
             .await
-            .map_err(Self::map_dependency_error)?
+            .map_err(|err| Self::map_sqlx_error(err, "get quote"))?
             .ok_or_else(|| ApplicationError::NotFound("quote not found".to_string()))?;
 
         Self::map_row_to_quote(row)
@@ -315,7 +343,7 @@ impl QuotePort for PostgresQuoteRepo {
             .build_query_as::<QuoteRow>()
             .fetch_all(&self.pool)
             .await
-            .map_err(Self::map_dependency_error)?;
+            .map_err(|err| Self::map_sqlx_error(err, "list quote"))?;
 
         rows.into_iter().map(Self::map_row_to_quote).collect()
     }
@@ -383,7 +411,7 @@ impl QuotePort for PostgresQuoteRepo {
             .build_query_as::<QuoteRow>()
             .fetch_optional(&self.pool)
             .await
-            .map_err(Self::map_dependency_error)?
+            .map_err(|err| Self::map_sqlx_error(err, "update quote"))?
             .ok_or_else(|| ApplicationError::NotFound("quote not found".to_string()))?;
 
         Self::map_row_to_quote(row)
@@ -394,9 +422,10 @@ impl QuotePort for PostgresQuoteRepo {
             .bind(id)
             .execute(&self.pool)
             .await
-            .map_err(Self::map_dependency_error)?;
+            .map(|result| result.rows_affected())
+            .map_err(|err| Self::map_sqlx_error(err, "delete quote"))?;
 
-        if result.rows_affected() == 0 {
+        if result == 0 {
             return Err(ApplicationError::NotFound("quote not found".to_string()));
         }
         Ok(())

@@ -178,3 +178,7 @@ quote download --id 1 --external en --out ./en.txt
 quote download --id 1 --markdown zh --out ./zh.md
 quote download --id 1 --image 0 --out ./0.bin
 ```
+
+# Todo
+
+1. sqlx migration管理代替init_quote.sql
