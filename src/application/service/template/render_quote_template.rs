@@ -338,48 +338,21 @@ fn pad_left_min_width(value: &str, width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::{RenderQuoteTemplateService, TemplateImageMode};
-    use crate::application::storage::{StoragePayload, StoragePort};
+    use crate::application::storage::MockStoragePort;
     use crate::application::ApplicationError;
     use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
     use crate::domain::value::{Lang, ObjectKey};
-    use async_trait::async_trait;
     use std::collections::HashMap;
 
-    struct FakeStorage {
-        objects: HashMap<String, Vec<u8>>,
-    }
-
-    impl FakeStorage {
-        fn new(objects: HashMap<String, Vec<u8>>) -> Self {
-            Self { objects }
-        }
-    }
-
-    #[async_trait]
-    impl StoragePort for FakeStorage {
-        async fn upload(
-            &self,
-            _path: &str,
-            _payload: StoragePayload,
-            _content_type: &str,
-        ) -> Result<ObjectKey, ApplicationError> {
-            Err(ApplicationError::Dependency("not implemented in fake".to_string()))
-        }
-
-        async fn delete(&self, _key: &ObjectKey) -> Result<(), ApplicationError> {
-            Ok(())
-        }
-
-        async fn exists(&self, key: &ObjectKey) -> Result<bool, ApplicationError> {
-            Ok(self.objects.contains_key(key.as_str()))
-        }
-
-        async fn download(&self, key: &ObjectKey) -> Result<Vec<u8>, ApplicationError> {
-            self.objects
+    fn build_mock_storage(objects: HashMap<String, Vec<u8>>) -> MockStoragePort {
+        let mut storage = MockStoragePort::new();
+        storage.expect_download().returning(move |key| {
+            objects
                 .get(key.as_str())
                 .cloned()
                 .ok_or_else(|| ApplicationError::NotFound(format!("missing: {}", key.as_str())))
-        }
+        });
+        storage
     }
 
     fn tiny_png_bytes() -> Vec<u8> {
@@ -418,7 +391,7 @@ mod tests {
         objects.insert("markdown/zh/doc".to_string(), b"# title".to_vec());
         objects.insert("image/0".to_string(), tiny_png_bytes());
 
-        let storage = FakeStorage::new(objects);
+        let storage = build_mock_storage(objects);
         let service = RenderQuoteTemplateService::new(&storage, TemplateImageMode::Meta);
         let quote = build_quote();
 
@@ -443,7 +416,7 @@ mod tests {
         objects.insert("markdown/zh/doc".to_string(), b"# title".to_vec());
         objects.insert("image/0".to_string(), tiny_png_bytes());
 
-        let storage = FakeStorage::new(objects);
+        let storage = build_mock_storage(objects);
         let quote = build_quote();
         let service = RenderQuoteTemplateService::new(&storage, TemplateImageMode::Meta);
 
@@ -464,12 +437,7 @@ mod tests {
 
     #[tokio::test]
     async fn render_supports_id_width_expr() {
-        let mut objects = HashMap::new();
-        objects.insert("text/en/ext".to_string(), b"external-content".to_vec());
-        objects.insert("markdown/zh/doc".to_string(), b"# title".to_vec());
-        objects.insert("image/0".to_string(), tiny_png_bytes());
-
-        let storage = FakeStorage::new(objects);
+        let storage = MockStoragePort::new();
         let quote = build_quote();
         let service = RenderQuoteTemplateService::new(&storage, TemplateImageMode::Meta);
 

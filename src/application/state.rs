@@ -2,7 +2,7 @@ use crate::application::config::{ApplicationConfig, DatabaseBackend, StorageBack
 use crate::application::quote::QuotePort;
 use crate::application::storage::StoragePort;
 use crate::application::ApplicationError;
-use crate::infra::{MinioStorageRepo, PostgresQuoteRepo};
+use crate::infra::{MinioStorageRepo, NoneStorageRepo, PostgresQuoteRepo};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 
@@ -31,7 +31,7 @@ impl ApplicationState {
     ///
     /// 当前支持：
     /// - 数据库：`postgres`
-    /// - 存储：`minio`
+    /// - 存储：`none` / `minio`
     pub async fn new() -> Result<Self, ApplicationError> {
         let config = ApplicationConfig::load()?;
 
@@ -62,6 +62,7 @@ impl ApplicationState {
         };
 
         let storage_port: Arc<dyn StoragePort + Send + Sync> = match config.storage.backend {
+            StorageBackend::None => Arc::new(NoneStorageRepo::new()),
             StorageBackend::Minio => {
                 let minio = config.storage.minio.as_ref().ok_or_else(|| {
                     ApplicationError::InvalidInput(

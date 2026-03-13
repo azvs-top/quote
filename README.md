@@ -74,7 +74,7 @@ max_connections = 10
 min_connections = 0
 
 [storage]
-backend = "minio" # minio | file(未实现)
+backend = "none" # none | minio | file(未实现)
 
 [storage.minio]
 endpoint = "https://minio.example.com"
@@ -92,6 +92,12 @@ image_mode = "meta" # meta | ascii | view
 [cli.format.presets]
 brief = "{{.id}}: {{.inline.en}}"
 full = "{{}}"
+```
+
+如果当前只使用 inline quote，不需要对象存储，可直接配置：
+```toml
+[storage]
+backend = "none"
 ```
 
 `--format` 选择优先级：

@@ -6,8 +6,10 @@ use crate::application::ApplicationState;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-pub async fn run(state: ApplicationState) -> anyhow::Result<()> {
+pub async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    // 先完成 CLI 参数校验，再初始化外部依赖，避免缺参时提前连接数据库/对象存储。
+    let state = ApplicationState::new().await?;
     match cli.command {
         Command::Get(args) => handlers::handle_get(&state, args).await?,
         Command::List(args) => handlers::handle_list(&state, args).await?,

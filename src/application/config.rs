@@ -151,13 +151,14 @@ pub struct MysqlConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StorageBackend {
+    None,
     Minio,
     File,
 }
 
 impl Default for StorageBackend {
     fn default() -> Self {
-        Self::File
+        Self::None
     }
 }
 
@@ -173,10 +174,12 @@ pub struct StorageConfig {
 
 impl StorageConfig {
     /// 校验存储 backend 与子配置块的匹配关系。
+    /// - `none` 不需要额外配置
     /// - `minio` 需要 `[storage.minio]`
     /// - `file` 需要 `[storage.file]`
     fn validate_semantics(&self) -> Result<(), ApplicationError> {
         match self.backend {
+            StorageBackend::None => {}
             StorageBackend::Minio => {
                 if self.minio.is_none() {
                     return Err(ApplicationError::InvalidInput(

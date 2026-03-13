@@ -1,13 +1,16 @@
 [package]
+# crate 基本信息
 name = "azvs_quote"
 version = "0.2.3"
 edition = "2024"
 
 [[bin]]
+# CLI 可执行入口
 name = "quote"
 path = "src/bin/cli.rs"
 
 [[bin]]
+# HTTP 可执行入口（当前仍是占位）
 name = "quote-http"
 path = "src/bin/http.rs"
 
@@ -15,41 +18,48 @@ path = "src/bin/http.rs"
 
 # 简化自定义错误类型的定义
 thiserror = "2.0.18"
-# 简化错误处理的库
+# 应用层统一错误封装与快速返回
 anyhow = "1.0.100"
-# Serialize与Deserialize
+# Serialize / Deserialize
 serde = { version = "1.0.228", features = ["derive"] }
-# JSON的Serialize与Deserialize
+# JSON 编解码
 serde_json = "1.0.149"
 # 允许在 trait 中定义异步方法
 async-trait = "0.1.89"
-# 跨平台获取标准config路径
+# 跨平台获取标准配置目录
 directories = "6.0.0"
-# 外部配置 config
+# 从文件和环境变量加载配置
 config = "0.15.19"
-# 用于单元测试, 为 trait 和结构体自动生成 mock 对象
+# 为 trait 自动生成 mock，用于单元测试
 mockall = "0.14.0"
-#  异步运行时，允许`async fn main()`
+# 异步运行时，支持 `async fn main()` 与异步 IO
 tokio = { version = "1.49", features = ["macros", "rt-multi-thread"] }
+# HTTP 服务框架（为 quote-http 预留）
 axum = "0.8.4"
 
 
 
-# 数据库连接
+# 数据库访问（当前实现为 Postgres）
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "macros"] }
 
-# 命令行 CLI
+# CLI 参数解析
 clap = { version = "4.5.57", features = ["derive"] }
+# 终端字符串宽度计算，用于对齐输出
 unicode-width = "0.2.0"
+# HTTP 中间件能力，例如 CORS
 tower-http = { version = "0.6.6", features = ["cors"] }
+# 根据字节内容推断文件类型 / MIME
 infer = "0.19.0"
 
-# AWS S3 SDK
+# AWS 通用配置加载
 aws-config = "1.8.13"
+# S3 API 客户端
 aws-sdk-s3 = "1.122.0"
-log = "0.4.29"
+# 生成对象存储 key 所用的 UUID
 uuid = { version = "1.20.0", features = ["v4"] }
+# 轻量状态容器（当前项目中使用很少）
 state = "0.6.0"
+# 图片解码、尺寸读取与 ASCII 渲染前处理
 image = { version = "0.25.8", default-features = true }
-# 图片处理
+# 在终端中直接显示图片
 viuer = "0.11.0"

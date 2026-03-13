@@ -726,7 +726,6 @@ dependencies = [
  "directories",
  "image",
  "infer",
- "log",
  "mockall",
  "serde",
  "serde_json",
