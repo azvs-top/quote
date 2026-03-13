@@ -39,8 +39,8 @@ axum = "0.8.4"
 
 
 
-# 数据库访问（当前实现为 Postgres）
-sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "macros"] }
+# 数据库访问（当前实现为 Postgres / Sqlite）
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "sqlite", "macros"] }
 
 # CLI 参数解析
 clap = { version = "4.5.57", features = ["derive"] }

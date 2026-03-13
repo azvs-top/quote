@@ -1,9 +1,11 @@
-use crate::application::config::{ApplicationConfig, DatabaseBackend, StorageBackend};
+use crate::application::config::{ApplicationConfig, DatabaseBackend, StorageBackend, resolve_config_file};
 use crate::application::quote::QuotePort;
 use crate::application::storage::StoragePort;
 use crate::application::ApplicationError;
-use crate::infra::{MinioStorageRepo, NoneStorageRepo, PostgresQuoteRepo};
+use crate::infra::{MinioStorageRepo, NoneStorageRepo, PostgresQuoteRepo, SqliteQuoteRepo};
 use sqlx::postgres::PgPoolOptions;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -30,7 +32,7 @@ impl ApplicationState {
     /// 根据配置自动装配应用状态（默认入口）。
     ///
     /// 当前支持：
-    /// - 数据库：`postgres`
+    /// - 数据库：`postgres` / `sqlite`
     /// - 存储：`none` / `minio`
     pub async fn new() -> Result<Self, ApplicationError> {
         let config = ApplicationConfig::load()?;
@@ -53,6 +55,37 @@ impl ApplicationState {
                     })?;
 
                 Arc::new(PostgresQuoteRepo::new(pool))
+            }
+            DatabaseBackend::Sqlite => {
+                let sqlite = &config.database.sqlite;
+                let sqlite_path = resolve_sqlite_path(sqlite.path.as_deref())?;
+                if !sqlite_path.exists() {
+                    return Err(ApplicationError::InvalidInput(format!(
+                        "sqlite db not found: {} (initialize it manually first)",
+                        sqlite_path.display()
+                    )));
+                }
+                if !sqlite_path.is_file() {
+                    return Err(ApplicationError::InvalidInput(format!(
+                        "sqlite path is not a file: {}",
+                        sqlite_path.display()
+                    )));
+                }
+
+                let connect_options = SqliteConnectOptions::new()
+                    .filename(&sqlite_path)
+                    .create_if_missing(false);
+
+                let pool = SqlitePoolOptions::new()
+                    .max_connections(1)
+                    .min_connections(0)
+                    .connect_with(connect_options)
+                    .await
+                    .map_err(|err| {
+                        ApplicationError::Dependency(format!("connect sqlite failed: {err}"))
+                    })?;
+
+                Arc::new(SqliteQuoteRepo::new(pool))
             }
             DatabaseBackend::Mysql => {
                 return Err(ApplicationError::InvalidInput(
@@ -102,4 +135,45 @@ impl ApplicationState {
             config,
         ))
     }
+}
+
+fn resolve_sqlite_path(config_path: Option<&str>) -> Result<PathBuf, ApplicationError> {
+    if let Some(raw) = config_path.map(str::trim).filter(|v| !v.is_empty()) {
+        if raw == "~" {
+            let home = std::env::var("HOME").map_err(|err| {
+                ApplicationError::InvalidInput(format!(
+                    "database.sqlite.path uses '~' but HOME is not set: {err}"
+                ))
+            })?;
+            return Ok(PathBuf::from(home));
+        }
+        if let Some(suffix) = raw.strip_prefix("~/") {
+            let home = std::env::var("HOME").map_err(|err| {
+                ApplicationError::InvalidInput(format!(
+                    "database.sqlite.path uses '~/' but HOME is not set: {err}"
+                ))
+            })?;
+            return Ok(PathBuf::from(home).join(suffix));
+        }
+        let candidate = PathBuf::from(raw);
+        if candidate.is_absolute() {
+            return Ok(candidate);
+        }
+        let config_dir = resolve_config_dir()?;
+        return Ok(config_dir.join(candidate));
+    }
+
+    let mut base = resolve_config_dir()?;
+    base.push("quote.db");
+    Ok(base)
+}
+
+fn resolve_config_dir() -> Result<PathBuf, ApplicationError> {
+    let config_file = resolve_config_file()?;
+    config_file.parent().map(PathBuf::from).ok_or_else(|| {
+        ApplicationError::Dependency(format!(
+            "cannot resolve parent directory for config file: {}",
+            config_file.display()
+        ))
+    })
 }

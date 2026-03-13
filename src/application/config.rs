@@ -86,12 +86,13 @@ impl ApplicationConfig {
 #[serde(rename_all = "lowercase")]
 pub enum DatabaseBackend {
     Postgres,
+    Sqlite,
     Mysql,
 }
 
 impl Default for DatabaseBackend {
     fn default() -> Self {
-        Self::Postgres
+        Self::Sqlite
     }
 }
 
@@ -102,12 +103,15 @@ pub struct DatabaseConfig {
     #[serde(default)]
     pub postgres: Option<PostgresConfig>,
     #[serde(default)]
+    pub sqlite: SqliteConfig,
+    #[serde(default)]
     pub mysql: Option<MysqlConfig>,
 }
 
 impl DatabaseConfig {
     /// 校验数据库 backend 与子配置块的匹配关系。
     /// - `postgres` 需要 `[database.postgres]`
+    /// - `sqlite` 不需要额外配置（可选 `[database.sqlite]` 覆盖默认 path）
     /// - `mysql` 需要 `[database.mysql]`
     fn validate_semantics(&self) -> Result<(), ApplicationError> {
         match self.backend {
@@ -118,6 +122,7 @@ impl DatabaseConfig {
                     ));
                 }
             }
+            DatabaseBackend::Sqlite => {}
             DatabaseBackend::Mysql => {
                 if self.mysql.is_none() {
                     return Err(ApplicationError::InvalidInput(
@@ -146,6 +151,12 @@ pub struct MysqlConfig {
     pub max_connections: Option<u32>,
     #[serde(default)]
     pub min_connections: Option<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct SqliteConfig {
+    #[serde(default)]
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
