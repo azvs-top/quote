@@ -348,6 +348,26 @@ impl QuotePort for PostgresQuoteRepo {
         rows.into_iter().map(Self::map_row_to_quote).collect()
     }
 
+    async fn count(&self, query: QuoteQuery) -> Result<i64, ApplicationError> {
+        let mut qb = QueryBuilder::<Postgres>::new("SELECT COUNT(1) FROM quote.quote WHERE 1=1");
+
+        if let Some(id) = query.id() {
+            qb.push(" AND id = ");
+            qb.push_bind(id);
+        }
+
+        if !Self::is_empty_filter(query.filter()) {
+            qb.push(" AND (");
+            Self::push_filter_expr(&mut qb, query.filter())?;
+            qb.push(")");
+        }
+
+        qb.build_query_scalar::<i64>()
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|err| Self::map_sqlx_error(err, "count quote"))
+    }
+
     async fn update(&self, update: QuoteUpdate) -> Result<Quote, ApplicationError> {
         let mut qb = QueryBuilder::<Postgres>::new("UPDATE quote.quote SET ");
         let mut has_set = false;

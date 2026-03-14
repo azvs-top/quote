@@ -55,6 +55,19 @@ pub trait QuotePort {
     /// - 参数或查询执行失败时返回实现层映射后的错误。
     async fn list(&self, query: QuoteQuery) -> Result<Vec<Quote>, ApplicationError>;
 
+    /// 统计满足查询条件的 Quote 条数。
+    ///
+    /// # Parameters
+    /// - `query.id`：可选主键筛选。
+    /// - `query.filter`：存在性条件，语义与 `get/list` 相同。
+    ///
+    /// # Returns
+    /// - 返回匹配条数（`>= 0`）。
+    ///
+    /// # Errors
+    /// - 参数或查询执行失败时返回实现层映射后的错误。
+    async fn count(&self, query: QuoteQuery) -> Result<i64, ApplicationError>;
+
     /// 更新一条 Quote 并返回更新后的完整实体。
     ///
     /// # Parameters

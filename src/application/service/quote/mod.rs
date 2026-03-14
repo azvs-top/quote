@@ -1,3 +1,4 @@
+mod count_quote;
 mod create_quote;
 mod delete_quote;
 mod get_quote_by_id;
@@ -6,6 +7,7 @@ mod list_quote;
 mod partial_delete_quote;
 mod update_quote;
 
+pub use count_quote::*;
 pub use create_quote::*;
 pub use delete_quote::*;
 pub use get_quote_by_id::*;
