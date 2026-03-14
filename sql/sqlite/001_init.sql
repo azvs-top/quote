@@ -28,10 +28,10 @@ CREATE TABLE quote
     CONSTRAINT quote_has_content
         CHECK (
             inline <> '{}'
-            OR external <> '{}'
-            OR markdown <> '{}'
-            OR json_array_length(image) > 0
-        )
+                OR external <> '{}'
+                OR markdown <> '{}'
+                OR json_array_length(image) > 0
+            )
 );
 
 -- 创建触发器：更新记录时自动更新时间戳

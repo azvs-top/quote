@@ -21,10 +21,10 @@ CREATE TABLE IF NOT EXISTS quote.quote
     -- 业务逻辑约束：inline, external, markdown, image 必须至少有一个包含数据
     CONSTRAINT quote_has_content CHECK (
         inline <> '{}'::jsonb
-        OR external <> '{}'::jsonb
-        OR markdown <> '{}'::jsonb
-        OR jsonb_array_length(image) > 0
-    )
+            OR external <> '{}'::jsonb
+            OR markdown <> '{}'::jsonb
+            OR jsonb_array_length(image) > 0
+        )
 );
 
 -- 时间维度索引：优化基于时间的排序
