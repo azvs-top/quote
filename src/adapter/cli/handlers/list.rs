@@ -1,5 +1,5 @@
 use crate::adapter::cli::ListArgs;
-use crate::adapter::cli::format::{resolve_effective_format, resolve_image_mode};
+use crate::adapter::cli::format::resolve_effective_format;
 use crate::adapter::cli::output::print_quotes;
 use crate::application::quote::QuoteQuery;
 use crate::application::service::quote::ListQuoteService;
@@ -14,11 +14,8 @@ pub(super) async fn handle_list(state: &ApplicationState, args: ListArgs) -> any
         cli_cfg.default_list.as_deref(),
         &cli_cfg.presets,
     )?;
-    let image_mode = resolve_image_mode(
-        args.image_ascii,
-        args.image_view,
-        CliImageMode::from(cli_cfg.image_mode),
-    );
+    // `list` is fixed to meta output for image expressions.
+    let image_mode = CliImageMode::Meta;
     let render_template_service =
         RenderQuoteTemplateService::new(state.storage_port.as_ref(), image_mode.into());
 

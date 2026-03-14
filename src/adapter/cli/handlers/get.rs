@@ -18,7 +18,7 @@ pub(super) async fn handle_get(state: &ApplicationState, args: GetArgs) -> anyho
     let image_mode = resolve_image_mode(
         args.image_ascii,
         args.image_view,
-        CliImageMode::from(cli_cfg.image_mode),
+        CliImageMode::from(cli_cfg.get_image_mode),
     );
     let render_template_service =
         RenderQuoteTemplateService::new(state.storage_port.as_ref(), image_mode.into());

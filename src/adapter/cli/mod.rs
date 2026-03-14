@@ -110,20 +110,6 @@ pub(super) struct ListArgs {
         help = "使用配置文件 [cli.format.presets] 中的模板名称"
     )]
     pub(super) format_preset: Option<String>,
-    #[arg(
-        long = "image-ascii",
-        default_value_t = false,
-        conflicts_with = "image_view",
-        help = "模板中 $image 的输出模式使用 ascii"
-    )]
-    pub(super) image_ascii: bool,
-    #[arg(
-        long = "image-view",
-        default_value_t = false,
-        conflicts_with = "image_ascii",
-        help = "模板中 $image 的输出模式使用 view（终端直出优先）"
-    )]
-    pub(super) image_view: bool,
 }
 
 #[derive(clap::Args)]

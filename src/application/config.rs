@@ -243,7 +243,7 @@ pub struct CliConfig {
 pub struct CliFormatConfig {
     pub default_get: Option<String>,
     pub default_list: Option<String>,
-    pub image_mode: CliImageMode,
+    pub get_image_mode: CliImageMode,
     pub presets: HashMap<String, String>,
 }
 
@@ -252,7 +252,7 @@ impl Default for CliFormatConfig {
         Self {
             default_get: None,
             default_list: None,
-            image_mode: CliImageMode::Meta,
+            get_image_mode: CliImageMode::Meta,
             presets: HashMap::new(),
         }
     }
