@@ -15,6 +15,17 @@ git push origin master
 git push github master
 ```
 
+```bash
+# 拉取上游仓库所有最新改动
+git fetch upstream
+# 切换到你本地的主分支
+git checkout master
+# 合并 upstream/master
+git merge upstream/master
+
+git push origin master
+```
+
 ## 快速开始（30 秒）
 
 ```bash
