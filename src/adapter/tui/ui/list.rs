@@ -52,7 +52,11 @@ fn build_row_text(
         return trim_to_width(&prefix, row_budget);
     }
     let rest_budget = row_budget - UnicodeWidthStr::width(prefix.as_str());
-    format!("{}{}", prefix, trim_to_width(&preview_inline(quote), rest_budget))
+    format!(
+        "{}{}",
+        prefix,
+        trim_to_width(&preview_inline(quote), rest_budget)
+    )
 }
 
 fn trim_to_width(input: &str, max_width: usize) -> String {

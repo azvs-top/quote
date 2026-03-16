@@ -269,7 +269,9 @@ mod tests {
     #[test]
     fn empty_config_defaults_to_sqlite_and_file() {
         let config = ApplicationConfig::default();
-        config.validate_semantics().expect("default config should be valid");
+        config
+            .validate_semantics()
+            .expect("default config should be valid");
         assert!(matches!(config.storage.backend, StorageBackend::File));
     }
 
@@ -277,7 +279,9 @@ mod tests {
     fn file_backend_does_not_require_storage_file_section() {
         let config: ApplicationConfig =
             load_config().expect("load config without file section should succeed");
-        config.validate_semantics().expect("file backend without section should be valid");
+        config
+            .validate_semantics()
+            .expect("file backend without section should be valid");
     }
 }
 

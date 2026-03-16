@@ -66,9 +66,14 @@ impl Component<Msg, NoUserEvent> for Controller {
 
 fn handle_command_mode(ev: Event<NoUserEvent>) -> Option<Msg> {
     match ev {
-        Event::Keyboard(KeyEvent { code: Key::Enter, .. }) => Some(Msg::ExecuteCommand),
+        Event::Keyboard(KeyEvent {
+            code: Key::Enter, ..
+        }) => Some(Msg::ExecuteCommand),
         Event::Keyboard(KeyEvent { code: Key::Esc, .. }) => Some(Msg::CancelCommand),
-        Event::Keyboard(KeyEvent { code: Key::Backspace, .. }) => Some(Msg::PopCommand),
+        Event::Keyboard(KeyEvent {
+            code: Key::Backspace,
+            ..
+        }) => Some(Msg::PopCommand),
         Event::Keyboard(KeyEvent {
             code: Key::Char(ch),
             ..
@@ -84,8 +89,12 @@ fn handle_goto_mode(ev: Event<NoUserEvent>) -> Option<Msg> {
             code: Key::Char('g'),
             ..
         }) => Some(Msg::CancelGoto),
-        Event::Keyboard(KeyEvent { code: Key::Enter, .. }) => Some(Msg::ConfirmGoto),
-        Event::Keyboard(KeyEvent { code: Key::Down, .. })
+        Event::Keyboard(KeyEvent {
+            code: Key::Enter, ..
+        }) => Some(Msg::ConfirmGoto),
+        Event::Keyboard(KeyEvent {
+            code: Key::Down, ..
+        })
         | Event::Keyboard(KeyEvent {
             code: Key::Char('j'),
             ..
@@ -113,7 +122,9 @@ fn handle_detail_mode(ev: Event<NoUserEvent>) -> Option<Msg> {
             code: Key::Char('h'),
             ..
         }) => Some(Msg::BackToList),
-        Event::Keyboard(KeyEvent { code: Key::Down, .. })
+        Event::Keyboard(KeyEvent {
+            code: Key::Down, ..
+        })
         | Event::Keyboard(KeyEvent {
             code: Key::Char('j'),
             ..
@@ -163,7 +174,9 @@ fn handle_list_mode(ev: Event<NoUserEvent>) -> Option<Msg> {
             code: Key::Char('r'),
             ..
         }) => Some(Msg::Reload),
-        Event::Keyboard(KeyEvent { code: Key::Down, .. })
+        Event::Keyboard(KeyEvent {
+            code: Key::Down, ..
+        })
         | Event::Keyboard(KeyEvent {
             code: Key::Char('j'),
             ..
@@ -181,12 +194,16 @@ fn handle_list_mode(ev: Event<NoUserEvent>) -> Option<Msg> {
             code: Key::Char('K'),
             ..
         }) => Some(Msg::FirstItem),
-        Event::Keyboard(KeyEvent { code: Key::Right, .. })
+        Event::Keyboard(KeyEvent {
+            code: Key::Right, ..
+        })
         | Event::Keyboard(KeyEvent {
             code: Key::Char('n'),
             ..
         }) => Some(Msg::NextPage),
-        Event::Keyboard(KeyEvent { code: Key::Left, .. })
+        Event::Keyboard(KeyEvent {
+            code: Key::Left, ..
+        })
         | Event::Keyboard(KeyEvent {
             code: Key::Char('p'),
             ..
@@ -203,7 +220,9 @@ fn handle_list_mode(ev: Event<NoUserEvent>) -> Option<Msg> {
             code: Key::Char('l'),
             ..
         })
-        | Event::Keyboard(KeyEvent { code: Key::Enter, .. }) => Some(Msg::OpenDetail),
+        | Event::Keyboard(KeyEvent {
+            code: Key::Enter, ..
+        }) => Some(Msg::OpenDetail),
         _ => None,
     }
 }

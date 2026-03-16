@@ -17,7 +17,11 @@ pub(crate) fn render(frame: &mut ratatui::Frame<'_>, area: Rect, state: &TuiStat
 
     let list = List::new(items)
         .block(Block::default().title("Goto").borders(Borders::ALL))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
         .highlight_symbol("> ");
     frame.render_stateful_widget(list, popup, &mut list_state);
 }

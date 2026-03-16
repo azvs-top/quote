@@ -172,18 +172,10 @@ impl Default for ViewState {
     }
 }
 
+#[derive(Default)]
 pub(crate) struct TuiState {
     pub(crate) view: ViewState,
     pub(crate) overlay: OverlayState,
-}
-
-impl Default for TuiState {
-    fn default() -> Self {
-        Self {
-            view: ViewState::default(),
-            overlay: OverlayState::default(),
-        }
-    }
 }
 
 impl ViewState {

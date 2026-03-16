@@ -42,66 +42,8 @@ fn build_detail_preview_text(quote: &Quote) -> Text<'static> {
         Line::from(format!("markdown langs: {}", quote.markdown().len())),
         Line::from(format!("images: {}", quote.image().len())),
         Line::from(""),
-        Line::from("inline:"),
     ];
-
-    let mut inline_items: Vec<_> = quote
-        .inline()
-        .iter()
-        .map(|(lang, text)| (lang.as_str().to_string(), text.clone()))
-        .collect();
-    inline_items.sort_by(|a, b| a.0.cmp(&b.0));
-
-    if inline_items.is_empty() {
-        lines.push(Line::from("  <empty>"));
-    } else {
-        for (lang, text) in inline_items {
-            lines.push(Line::from(format!("  {lang}: {text}")));
-        }
-    }
-
-    lines.push(Line::from(""));
-    lines.push(Line::from("external:"));
-    let mut external_items: Vec<_> = quote
-        .external()
-        .iter()
-        .map(|(lang, key)| (lang.as_str().to_string(), key.as_str().to_string()))
-        .collect();
-    external_items.sort_by(|a, b| a.0.cmp(&b.0));
-    if external_items.is_empty() {
-        lines.push(Line::from("  <empty>"));
-    } else {
-        for (lang, key) in external_items {
-            lines.push(Line::from(format!("  {lang}: {key}")));
-        }
-    }
-
-    lines.push(Line::from(""));
-    lines.push(Line::from("markdown:"));
-    let mut markdown_items: Vec<_> = quote
-        .markdown()
-        .iter()
-        .map(|(lang, key)| (lang.as_str().to_string(), key.as_str().to_string()))
-        .collect();
-    markdown_items.sort_by(|a, b| a.0.cmp(&b.0));
-    if markdown_items.is_empty() {
-        lines.push(Line::from("  <empty>"));
-    } else {
-        for (lang, key) in markdown_items {
-            lines.push(Line::from(format!("  {lang}: {key}")));
-        }
-    }
-
-    lines.push(Line::from(""));
-    lines.push(Line::from("images:"));
-    if quote.image().is_empty() {
-        lines.push(Line::from("  <empty>"));
-    } else {
-        for (idx, key) in quote.image().iter().enumerate() {
-            lines.push(Line::from(format!("  [{idx}] {}", key.as_str())));
-        }
-    }
-
+    push_inline_section(&mut lines, quote);
     Text::from(lines)
 }
 
@@ -110,23 +52,28 @@ fn build_detail_full_text(quote: &Quote) -> (Text<'static>, usize) {
         Line::from(format!("id: {}", quote.id())),
         Line::from(format!("remark: {}", quote.remark().unwrap_or("<none>"))),
         Line::from(""),
-        Line::from("inline:"),
     ];
+    push_inline_section(&mut lines, quote);
+    push_external_section(&mut lines, quote);
+    push_markdown_section(&mut lines, quote);
+    push_image_section(&mut lines, quote);
 
+    let line_count = lines.len();
+    (Text::from(lines), line_count)
+}
+
+fn push_inline_section(lines: &mut Vec<Line<'static>>, quote: &Quote) {
+    lines.push(Line::from("inline:"));
     let mut inline_items: Vec<_> = quote
         .inline()
         .iter()
         .map(|(lang, text)| (lang.as_str().to_string(), text.clone()))
         .collect();
     inline_items.sort_by(|a, b| a.0.cmp(&b.0));
-    if inline_items.is_empty() {
-        lines.push(Line::from("  <empty>"));
-    } else {
-        for (lang, text) in inline_items {
-            lines.push(Line::from(format!("  {lang}: {text}")));
-        }
-    }
+    push_items(lines, inline_items);
+}
 
+fn push_external_section(lines: &mut Vec<Line<'static>>, quote: &Quote) {
     lines.push(Line::from(""));
     lines.push(Line::from("external:"));
     let mut external_items: Vec<_> = quote
@@ -135,14 +82,10 @@ fn build_detail_full_text(quote: &Quote) -> (Text<'static>, usize) {
         .map(|(lang, key)| (lang.as_str().to_string(), key.as_str().to_string()))
         .collect();
     external_items.sort_by(|a, b| a.0.cmp(&b.0));
-    if external_items.is_empty() {
-        lines.push(Line::from("  <empty>"));
-    } else {
-        for (lang, key) in external_items {
-            lines.push(Line::from(format!("  {lang}: {key}")));
-        }
-    }
+    push_items(lines, external_items);
+}
 
+fn push_markdown_section(lines: &mut Vec<Line<'static>>, quote: &Quote) {
     lines.push(Line::from(""));
     lines.push(Line::from("markdown:"));
     let mut markdown_items: Vec<_> = quote
@@ -151,14 +94,10 @@ fn build_detail_full_text(quote: &Quote) -> (Text<'static>, usize) {
         .map(|(lang, key)| (lang.as_str().to_string(), key.as_str().to_string()))
         .collect();
     markdown_items.sort_by(|a, b| a.0.cmp(&b.0));
-    if markdown_items.is_empty() {
-        lines.push(Line::from("  <empty>"));
-    } else {
-        for (lang, key) in markdown_items {
-            lines.push(Line::from(format!("  {lang}: {key}")));
-        }
-    }
+    push_items(lines, markdown_items);
+}
 
+fn push_image_section(lines: &mut Vec<Line<'static>>, quote: &Quote) {
     lines.push(Line::from(""));
     lines.push(Line::from("images:"));
     if quote.image().is_empty() {
@@ -168,7 +107,14 @@ fn build_detail_full_text(quote: &Quote) -> (Text<'static>, usize) {
             lines.push(Line::from(format!("  [{idx}] {}", key.as_str())));
         }
     }
+}
 
-    let line_count = lines.len();
-    (Text::from(lines), line_count)
+fn push_items(lines: &mut Vec<Line<'static>>, items: Vec<(String, String)>) {
+    if items.is_empty() {
+        lines.push(Line::from("  <empty>"));
+    } else {
+        for (lang, value) in items {
+            lines.push(Line::from(format!("  {lang}: {value}")));
+        }
+    }
 }
