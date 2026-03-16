@@ -6,7 +6,7 @@
 - `--format` 模板渲染（`.path` / `$path`）
 - 图片 `meta` / `ascii` / `view` 三种输出模式
 
-当前仓库版本：`0.2.3`
+当前仓库版本：`0.3.0`
 
 ## 快速笔记（Git 提交）
 
@@ -16,6 +16,7 @@ git push github master
 ```
 
 ```bash
+# git remote add upstream https://github.com/azvs32/quote
 # 拉取上游仓库所有最新改动
 git fetch upstream
 # 切换到你本地的主分支
