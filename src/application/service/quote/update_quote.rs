@@ -243,7 +243,6 @@ impl UpdateUploadPlan {
         let mut idx = 0usize;
 
         let external = if self.replace_external {
-            // patch merge: 未传语言保持原值，传入语言覆盖为新上传 key。
             let mut map = previous.external().clone();
             for lang in &self.external_langs {
                 map.insert(lang.clone(), uploaded[idx].clone());
@@ -255,7 +254,6 @@ impl UpdateUploadPlan {
         };
 
         let markdown = if self.replace_markdown {
-            // patch merge: 未传语言保持原值，传入语言覆盖为新上传 key。
             let mut map = previous.markdown().clone();
             for lang in &self.markdown_langs {
                 map.insert(lang.clone(), uploaded[idx].clone());
@@ -267,7 +265,6 @@ impl UpdateUploadPlan {
         };
 
         let image = if self.replace_image {
-            // patch merge: image 使用追加语义。
             let mut merged = previous.image().to_vec();
             merged.extend_from_slice(&uploaded[idx..]);
             Some(merged)
@@ -276,7 +273,6 @@ impl UpdateUploadPlan {
         };
 
         let inline = if let Some(inline_patch) = &draft.inline {
-            // patch merge: 未传语言保持原值，传入语言覆盖文本。
             let mut merged = previous.inline().clone();
             for (lang, text) in inline_patch {
                 merged.insert(lang.clone(), text.clone());

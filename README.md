@@ -15,16 +15,26 @@ git push origin master
 git push github master
 ```
 
+下游仓库同步上游代码并开发流程
 ```bash
 # git remote add upstream https://github.com/azvs32/quote
+# 验证远程列表
+git remote -v
 # 拉取上游仓库所有最新改动
 git fetch upstream
 # 切换到你本地的主分支
 git checkout master
 # 合并 upstream/master
 git merge upstream/master
-
+# 同步到下游 Fork
 git push origin master
+
+# 开始新功能开发
+git checkout -b new-branch
+# ... 完成开发后
+git add .
+git commit -m "xxx"
+git push origin new-branch
 ```
 
 ## 快速开始（30 秒）

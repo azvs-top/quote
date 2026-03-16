@@ -62,8 +62,6 @@ aws-config = "1.8.13"
 aws-sdk-s3 = "1.122.0"
 # 生成对象存储 key 所用的 UUID
 uuid = { version = "1.20.0", features = ["v4"] }
-# 轻量状态容器（当前项目中使用很少）
-state = "0.6.0"
 # 图片解码、尺寸读取与 ASCII 渲染前处理
 image = { version = "0.25.8", default-features = true }
 # 在终端中直接显示图片

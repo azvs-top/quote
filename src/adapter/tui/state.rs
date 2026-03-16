@@ -152,7 +152,6 @@ pub(crate) struct ViewState {
     pub(crate) screen: Screen,
     pub(crate) help_locale: HelpLocale,
     pub(crate) detail_scroll: u16,
-    pub(crate) detail_scroll_cap: u16,
 }
 
 impl Default for ViewState {
@@ -167,7 +166,6 @@ impl Default for ViewState {
             screen: Screen::List,
             help_locale: HelpLocale::En,
             detail_scroll: 0,
-            detail_scroll_cap: 0,
         }
     }
 }
@@ -200,10 +198,7 @@ impl TuiState {
         if self.view.quotes.is_empty() {
             self.view.selected = 0;
         }
-        self.rebuild_detail_scroll_cap();
-        if self.view.detail_scroll > self.view.detail_scroll_cap {
-            self.view.detail_scroll = self.view.detail_scroll_cap;
-        }
+        self.view.detail_scroll = 0;
     }
 
     pub(crate) fn status_line(&self) -> String {
@@ -252,7 +247,6 @@ impl TuiState {
         if self.selected_quote().is_some() {
             self.view.screen = Screen::Detail;
             self.view.detail_scroll = 0;
-            self.rebuild_detail_scroll_cap();
             self.restore_status_for_screen();
         }
     }
@@ -274,11 +268,7 @@ impl TuiState {
     }
 
     pub(crate) fn scroll_detail_down(&mut self) {
-        self.view.detail_scroll = self
-            .view
-            .detail_scroll
-            .saturating_add(1)
-            .min(self.view.detail_scroll_cap);
+        self.view.detail_scroll = self.view.detail_scroll.saturating_add(1);
     }
 
     pub(crate) fn scroll_detail_up(&mut self) {
@@ -306,6 +296,10 @@ impl TuiState {
         self.overlay.command.take()
     }
 
+    pub(crate) fn set_status(&mut self, status: impl Into<String>) {
+        self.view.status = status.into();
+    }
+
     pub(crate) fn enter_goto_mode(&mut self) {
         self.overlay.goto.enter();
         self.view.status = GOTO_HINT.to_string();
@@ -326,8 +320,10 @@ impl TuiState {
         self.overlay.goto.prev();
     }
 
-    pub(crate) fn goto_target(&self) -> GotoPage {
-        self.overlay.goto.target()
+    pub(crate) fn confirm_goto_target(&mut self) -> GotoPage {
+        let target = self.overlay.goto.target();
+        self.overlay.goto.cancel();
+        target
     }
 
     pub(crate) fn goto_entries(&self) -> Vec<String> {
@@ -341,18 +337,5 @@ impl TuiState {
                 label
             })
             .collect()
-    }
-
-    fn rebuild_detail_scroll_cap(&mut self) {
-        let Some(q) = self.selected_quote() else {
-            self.view.detail_scroll_cap = 0;
-            return;
-        };
-        let mut lines = 5usize;
-        lines += q.inline().len().max(1) + 2;
-        lines += q.external().len().max(1) + 2;
-        lines += q.markdown().len().max(1) + 2;
-        lines += q.image().len().max(1) + 1;
-        self.view.detail_scroll_cap = lines.min(u16::MAX as usize) as u16;
     }
 }

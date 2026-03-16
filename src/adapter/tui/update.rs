@@ -75,7 +75,9 @@ impl Updater {
             }
             "q" | "quit" => true,
             _ => {
-                model.borrow_mut().view.status = format!("unknown command: :{command}");
+                model
+                    .borrow_mut()
+                    .set_status(format!("unknown command: :{command}"));
                 false
             }
         };
@@ -83,12 +85,7 @@ impl Updater {
     }
 
     fn confirm_goto(&self, model: &Rc<RefCell<TuiState>>) {
-        let target = {
-            let mut state = model.borrow_mut();
-            let target = state.goto_target();
-            state.overlay.goto.cancel();
-            target
-        };
+        let target = model.borrow_mut().confirm_goto_target();
         match target {
             GotoPage::List => model.borrow_mut().back_to_list(),
             GotoPage::Help => model.borrow_mut().open_help(),
