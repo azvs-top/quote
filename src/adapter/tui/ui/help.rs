@@ -1,31 +1,23 @@
+use crate::adapter::tui::state::{HelpLocale, TuiState};
 use ratatui::layout::Rect;
-use ratatui::text::{Line, Text};
+use ratatui::text::Text;
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
-pub(super) fn render(frame: &mut ratatui::Frame<'_>, area: Rect) {
+const HELP_EN: &str = include_str!("../assets/help_en.txt");
+const HELP_ZH: &str = include_str!("../assets/help_zh.txt");
+
+pub(crate) fn render(frame: &mut ratatui::Frame<'_>, area: Rect, state: &TuiState) {
     frame.render_widget(
-        Paragraph::new(help_text())
+        Paragraph::new(help_text(state.view.help_locale))
             .block(Block::default().title("Help").borders(Borders::ALL))
             .wrap(Wrap { trim: false }),
         area,
     );
 }
 
-fn help_text() -> Text<'static> {
-    Text::from(vec![
-        Line::from("Navigation"),
-        Line::from("  j/k or ↓/↑    move selection"),
-        Line::from("  J/K           jump last/first item in current page"),
-        Line::from("  h/l or ←/→    prev/next page"),
-        Line::from("  H/L           first/last page"),
-        Line::from("  Enter         open selected item detail"),
-        Line::from("  r             reload current page"),
-        Line::from("  q             quit"),
-        Line::from(""),
-        Line::from("Command Mode"),
-        Line::from("  :help         open this help page"),
-        Line::from("  :list         back to list page"),
-        Line::from("  :q or :quit   quit"),
-        Line::from("  Esc           cancel command input"),
-    ])
+fn help_text(locale: HelpLocale) -> Text<'static> {
+    match locale {
+        HelpLocale::En => Text::from(HELP_EN),
+        HelpLocale::Zh => Text::from(HELP_ZH),
+    }
 }

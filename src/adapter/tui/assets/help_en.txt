@@ -1,0 +1,28 @@
+List
+  j/k or Down/Up  move selection
+  J/K             jump last/first item in page
+  n/p or Right/Left next/prev page
+  H/L             first/last page
+  l or Enter      open detail
+  r               reload page
+
+Detail
+  j/k or Down/Up  scroll detail
+  h               back to list
+
+Global
+  g               open goto popup
+  :               open command mode
+
+Goto Popup
+  j/k or Down/Up  choose page
+  Enter           jump
+  Esc or g        close
+
+Command
+  :help           open help
+  :q or :quit     quit
+  Esc             cancel input
+
+Help
+  t               toggle help language
