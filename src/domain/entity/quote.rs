@@ -87,7 +87,10 @@ impl Quote {
 
         let mut texts = Vec::with_capacity(langs.len());
         for lang in langs {
-            let text = self.inline.get(lang).ok_or(DomainError::QuoteMissingContent)?;
+            let text = self
+                .inline
+                .get(lang)
+                .ok_or(DomainError::QuoteMissingContent)?;
             if text.trim().is_empty() {
                 return Err(DomainError::QuoteInvalidContent);
             }

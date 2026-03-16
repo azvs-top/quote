@@ -1,6 +1,6 @@
 use crate::adapter::cli::DownloadArgs;
-use crate::application::service::quote::GetQuoteByIdService;
 use crate::application::ApplicationState;
+use crate::application::service::quote::GetQuoteByIdService;
 use crate::domain::value::{Lang, ObjectKey};
 
 #[derive(Debug, Clone)]

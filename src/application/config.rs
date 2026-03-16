@@ -35,6 +35,16 @@ pub fn resolve_config_file() -> Result<PathBuf, ApplicationError> {
     Ok(path)
 }
 
+pub fn resolve_config_dir() -> Result<PathBuf, ApplicationError> {
+    let config_file = resolve_config_file()?;
+    config_file.parent().map(PathBuf::from).ok_or_else(|| {
+        ApplicationError::Dependency(format!(
+            "cannot resolve parent directory for config file: {}",
+            config_file.display()
+        ))
+    })
+}
+
 /// 从配置文件 + 环境变量加载配置结构体。
 ///
 /// - 如果配置文件不存在，将只使用环境变量。
@@ -169,7 +179,7 @@ pub enum StorageBackend {
 
 impl Default for StorageBackend {
     fn default() -> Self {
-        Self::None
+        Self::File
     }
 }
 
@@ -187,7 +197,7 @@ impl StorageConfig {
     /// 校验存储 backend 与子配置块的匹配关系。
     /// - `none` 不需要额外配置
     /// - `minio` 需要 `[storage.minio]`
-    /// - `file` 需要 `[storage.file]`
+    /// - `file` 不需要额外配置（可选 `[storage.file]` 覆盖默认 root）
     fn validate_semantics(&self) -> Result<(), ApplicationError> {
         match self.backend {
             StorageBackend::None => {}
@@ -198,13 +208,7 @@ impl StorageConfig {
                     ));
                 }
             }
-            StorageBackend::File => {
-                if self.file.is_none() {
-                    return Err(ApplicationError::InvalidInput(
-                        "storage.backend=file requires [storage.file]".to_string(),
-                    ));
-                }
-            }
+            StorageBackend::File => {}
         }
         Ok(())
     }
@@ -255,6 +259,25 @@ impl Default for CliFormatConfig {
             get_image_mode: CliImageMode::Meta,
             presets: HashMap::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ApplicationConfig, StorageBackend, load_config};
+
+    #[test]
+    fn empty_config_defaults_to_sqlite_and_file() {
+        let config = ApplicationConfig::default();
+        config.validate_semantics().expect("default config should be valid");
+        assert!(matches!(config.storage.backend, StorageBackend::File));
+    }
+
+    #[test]
+    fn file_backend_does_not_require_storage_file_section() {
+        let config: ApplicationConfig =
+            load_config().expect("load config without file section should succeed");
+        config.validate_semantics().expect("file backend without section should be valid");
     }
 }
 

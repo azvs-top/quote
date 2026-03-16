@@ -1,5 +1,5 @@
-use crate::application::quote::{QuoteFilter, QuotePort, QuoteQuery};
 use crate::application::ApplicationError;
+use crate::application::quote::{QuoteFilter, QuotePort, QuoteQuery};
 use crate::domain::entity::Quote;
 
 /// 获取随机 Quote 的服务。

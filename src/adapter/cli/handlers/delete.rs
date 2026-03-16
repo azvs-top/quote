@@ -1,12 +1,15 @@
 use crate::adapter::cli::DeleteArgs;
 use crate::adapter::cli::confirm::confirm_yes;
+use crate::application::ApplicationState;
 use crate::application::service::quote::{
     DeleteQuoteService, PartialDeleteQuoteDraft, PartialDeleteQuoteService,
 };
-use crate::application::ApplicationState;
 use crate::domain::value::{Lang, ObjectKey};
 
-pub(super) async fn handle_delete(state: &ApplicationState, args: DeleteArgs) -> anyhow::Result<()> {
+pub(super) async fn handle_delete(
+    state: &ApplicationState,
+    args: DeleteArgs,
+) -> anyhow::Result<()> {
     let has_partial = args.all_inline
         || !args.inline.is_empty()
         || args.all_external

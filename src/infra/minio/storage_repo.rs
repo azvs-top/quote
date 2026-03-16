@@ -31,17 +31,18 @@ impl MinioStorageRepo {
             .load()
             .await;
 
-        let s3_config = Config::builder()
-            .behavior_version(BehaviorVersion::latest())
-            .endpoint_url(cfg.endpoint.clone())
-            .credentials_provider(shared_config.credentials_provider().ok_or_else(|| {
-                ApplicationError::Dependency("missing aws credentials provider".to_string())
-            })?)
-            .region(shared_config.region().cloned().ok_or_else(|| {
-                ApplicationError::Dependency("missing aws region".to_string())
-            })?)
-            .force_path_style(true)
-            .build();
+        let s3_config =
+            Config::builder()
+                .behavior_version(BehaviorVersion::latest())
+                .endpoint_url(cfg.endpoint.clone())
+                .credentials_provider(shared_config.credentials_provider().ok_or_else(|| {
+                    ApplicationError::Dependency("missing aws credentials provider".to_string())
+                })?)
+                .region(shared_config.region().cloned().ok_or_else(|| {
+                    ApplicationError::Dependency("missing aws region".to_string())
+                })?)
+                .force_path_style(true)
+                .build();
 
         Ok(Self {
             client: Client::from_conf(s3_config),
@@ -66,7 +67,10 @@ impl MinioStorageRepo {
     }
 
     /// 生成对象 key：`{path}/{uuid}`。
-    fn build_object_key(path: &str, _filename: Option<&str>) -> Result<ObjectKey, ApplicationError> {
+    fn build_object_key(
+        path: &str,
+        _filename: Option<&str>,
+    ) -> Result<ObjectKey, ApplicationError> {
         let path = path.trim_matches('/');
         let key = format!("{path}/{}", Uuid::new_v4());
         ObjectKey::new(key).map_err(ApplicationError::from)
@@ -108,7 +112,10 @@ impl StoragePort for MinioStorageRepo {
         match result {
             Ok(_) => Ok(()),
             Err(err) if Self::is_not_found(&err) => Ok(()),
-            Err(err) => Err(Self::map_dependency_error("minio delete_object failed", err)),
+            Err(err) => Err(Self::map_dependency_error(
+                "minio delete_object failed",
+                err,
+            )),
         }
     }
 

@@ -18,7 +18,11 @@ pub(super) struct BodyParts {
 pub(super) fn split_root(area: Rect) -> RootParts {
     let root = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(0), Constraint::Length(2)])
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(2),
+        ])
         .split(area);
     RootParts {
         title: root[0],

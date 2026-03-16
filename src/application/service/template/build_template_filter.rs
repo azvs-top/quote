@@ -1,6 +1,6 @@
 use super::NormalizeTemplateService;
-use crate::application::quote::QuoteFilter;
 use crate::application::ApplicationError;
+use crate::application::quote::QuoteFilter;
 use crate::domain::value::Lang;
 use std::collections::HashSet;
 

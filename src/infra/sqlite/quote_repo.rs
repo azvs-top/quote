@@ -1,5 +1,5 @@
-use crate::application::quote::{QuoteCreate, QuoteFilter, QuotePort, QuoteQuery, QuoteUpdate};
 use crate::application::ApplicationError;
+use crate::application::quote::{QuoteCreate, QuoteFilter, QuotePort, QuoteQuery, QuoteUpdate};
 use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
 use crate::domain::value::ObjectKey;
 use async_trait::async_trait;
@@ -65,9 +65,8 @@ impl SqliteQuoteRepo {
         value: &T,
         field: &str,
     ) -> Result<String, ApplicationError> {
-        serde_json::to_string(value).map_err(|err| {
-            ApplicationError::Dependency(format!("serialize {field} failed: {err}"))
-        })
+        serde_json::to_string(value)
+            .map_err(|err| ApplicationError::Dependency(format!("serialize {field} failed: {err}")))
     }
 
     fn deserialize_json_text<T: serde::de::DeserializeOwned>(
@@ -270,15 +269,15 @@ mod tests {
 
     #[test]
     fn sqlite_constraint_codes_are_mapped_to_user_facing_errors() {
-        let conflict = SqliteQuoteRepo::map_sqlite_db_error("op", "2067", "UNIQUE constraint failed");
+        let conflict =
+            SqliteQuoteRepo::map_sqlite_db_error("op", "2067", "UNIQUE constraint failed");
         assert!(matches!(conflict, ApplicationError::Conflict(_)));
 
         let invalid_input =
             SqliteQuoteRepo::map_sqlite_db_error("op", "787", "FOREIGN KEY constraint failed");
         assert!(matches!(invalid_input, ApplicationError::InvalidInput(_)));
 
-        let generic =
-            SqliteQuoteRepo::map_sqlite_db_error("op", "19", "constraint failed");
+        let generic = SqliteQuoteRepo::map_sqlite_db_error("op", "19", "constraint failed");
         assert!(matches!(generic, ApplicationError::InvalidInput(_)));
     }
 }

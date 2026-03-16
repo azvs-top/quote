@@ -1,7 +1,7 @@
+use crate::application::ApplicationError;
 use crate::application::quote::{QuotePort, QuoteQuery};
 use crate::application::service::storage::DeleteManyService;
 use crate::application::storage::StoragePort;
-use crate::application::ApplicationError;
 use crate::domain::value::ObjectKey;
 use std::collections::HashSet;
 
@@ -39,7 +39,10 @@ impl<'a> DeleteQuoteService<'a> {
             ));
         }
 
-        let existing = self.quote_port.get(QuoteQuery::builder().id(id).build()).await?;
+        let existing = self
+            .quote_port
+            .get(QuoteQuery::builder().id(id).build())
+            .await?;
         let keys = collect_storage_keys(&existing);
 
         self.quote_port.delete(id).await?;

@@ -24,19 +24,25 @@ pub(super) fn render(frame: &mut ratatui::Frame<'_>, area: Rect, app: &TuiApp) {
     } else {
         app.quotes
             .iter()
-            .map(|q| {
-                ListItem::new(build_row_text(q, row_budget, id_width))
-            })
+            .map(|q| ListItem::new(build_row_text(q, row_budget, id_width)))
             .collect()
     };
     let list = List::new(items)
         .block(Block::default().title("Quotes").borders(Borders::ALL))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
         .highlight_symbol("> ");
     frame.render_stateful_widget(list, area, &mut list_state);
 }
 
-fn build_row_text(quote: &crate::domain::entity::Quote, row_budget: usize, id_width: usize) -> String {
+fn build_row_text(
+    quote: &crate::domain::entity::Quote,
+    row_budget: usize,
+    id_width: usize,
+) -> String {
     let prefix = format!("{:>width$} ", quote.id(), width = id_width);
     if row_budget <= UnicodeWidthStr::width(prefix.as_str()) {
         return trim_to_width(&prefix, row_budget);

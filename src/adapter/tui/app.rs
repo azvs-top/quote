@@ -24,7 +24,7 @@ pub(super) struct TuiApp {
     pub(super) screen: Screen,
     pub(super) detail_scroll: u16,
     detail_scroll_cap: u16,
-    pub(super) command_mode: bool,   // true 时键盘输入进入 ":" 命令行
+    pub(super) command_mode: bool, // true 时键盘输入进入 ":" 命令行
     pub(super) command_input: String,
     pub(super) should_quit: bool,
 }
@@ -200,7 +200,10 @@ impl TuiApp {
     }
 
     pub(super) fn scroll_detail_down(&mut self) {
-        self.detail_scroll = self.detail_scroll.saturating_add(1).min(self.detail_scroll_cap);
+        self.detail_scroll = self
+            .detail_scroll
+            .saturating_add(1)
+            .min(self.detail_scroll_cap);
     }
 
     pub(super) fn scroll_detail_up(&mut self) {

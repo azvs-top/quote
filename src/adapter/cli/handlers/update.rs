@@ -1,12 +1,15 @@
 use crate::adapter::cli::UpdateArgs;
 use crate::adapter::cli::confirm::confirm_yes;
+use crate::application::ApplicationState;
 use crate::application::service::quote::{QuoteUpdateDraft, UpdateQuoteService};
 use crate::application::storage::StoragePayload;
-use crate::application::ApplicationState;
 use crate::domain::value::Lang;
 use std::path::PathBuf;
 
-pub(super) async fn handle_update(state: &ApplicationState, args: UpdateArgs) -> anyhow::Result<()> {
+pub(super) async fn handle_update(
+    state: &ApplicationState,
+    args: UpdateArgs,
+) -> anyhow::Result<()> {
     if !args.yes && !confirm_yes(&format!("update quote id={} ?", args.id))? {
         println!("aborted");
         return Ok(());

@@ -1,5 +1,5 @@
-use crate::application::quote::{QuoteCreate, QuoteFilter, QuotePort, QuoteQuery, QuoteUpdate};
 use crate::application::ApplicationError;
+use crate::application::quote::{QuoteCreate, QuoteFilter, QuotePort, QuoteQuery, QuoteUpdate};
 use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
 use crate::domain::value::ObjectKey;
 use async_trait::async_trait;
@@ -52,9 +52,8 @@ impl PostgresQuoteRepo {
         value: &T,
         field: &str,
     ) -> Result<Value, ApplicationError> {
-        serde_json::to_value(value).map_err(|err| {
-            ApplicationError::Dependency(format!("serialize {field} failed: {err}"))
-        })
+        serde_json::to_value(value)
+            .map_err(|err| ApplicationError::Dependency(format!("serialize {field} failed: {err}")))
     }
 
     /// 从 JSON 值反序列化为目标结构，并附带字段名便于定位错误。

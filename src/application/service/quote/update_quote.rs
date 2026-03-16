@@ -1,10 +1,10 @@
-use super::create_quote::{detect_content_type, UploadKind};
+use super::create_quote::{UploadKind, detect_content_type};
+use crate::application::ApplicationError;
 use crate::application::quote::{QuotePort, QuoteQuery, QuoteUpdate};
 use crate::application::service::storage::{
     DeleteManyService, UploadManyWithRollbackService, UploadObjectItem,
 };
 use crate::application::storage::StoragePayload;
-use crate::application::ApplicationError;
 use crate::domain::entity::{MultiLangText, Quote};
 use crate::domain::value::{Lang, ObjectKey};
 use std::collections::{HashMap, HashSet};
@@ -111,7 +111,12 @@ fn has_content_after_update(previous: &Quote, draft: &QuoteUpdateDraft) -> bool 
         .inline
         .as_ref()
         .map(|v| v.values().any(|text| !text.trim().is_empty()))
-        .unwrap_or_else(|| previous.inline().values().any(|text| !text.trim().is_empty()));
+        .unwrap_or_else(|| {
+            previous
+                .inline()
+                .values()
+                .any(|text| !text.trim().is_empty())
+        });
 
     let external_non_empty = draft
         .external
@@ -227,8 +232,7 @@ impl UpdateUploadPlan {
         previous: &Quote,
         uploaded: &[ObjectKey],
     ) -> Result<QuoteUpdate, ApplicationError> {
-        let expected =
-            self.external_langs.len() + self.markdown_langs.len() + self.image_count;
+        let expected = self.external_langs.len() + self.markdown_langs.len() + self.image_count;
         if uploaded.len() != expected {
             return Err(ApplicationError::Dependency(format!(
                 "uploaded key count mismatch: expected {expected}, got {}",

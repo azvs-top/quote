@@ -35,13 +35,13 @@ STORAGE__BACKEND=none
 backend = "sqlite"
 
 [storage]
-backend = "none"
+backend = "file"
 ```
 
 说明：
 - 默认 sqlite 数据库文件路径是 `~/.config/azvs/quote.db`
 - 项目不会自动初始化 sqlite 结构，需你手动建库并执行 SQL
-- 默认不支持对象存储，可使用inline模块，配置storage.backend获得完整功能
+- 默认文件存储根目录是 `quote.toml` 同目录下的 `data/`
 
 ## 3. 全量键说明
 
@@ -81,7 +81,7 @@ backend = "none"
 
 | 键 | 类型 | 默认值 | 必填 | 说明 |
 |---|---|---|---|---|
-| `backend` | string | `"none"` | 否 | 可选值：`none` / `minio` / `file` |
+| `backend` | string | `"file"` | 否 | 可选值：`none` / `minio` / `file` |
 
 ### 3.2.1 `[storage.minio]`
 
@@ -98,11 +98,11 @@ backend = "none"
 
 ### 3.2.2 `[storage.file]`
 
-当 `storage.backend = "file"` 时该段语义上必填，但当前实现未完成，启动会报“not implemented yet”。
+当 `storage.backend = "file"` 时该段可省略；未配置时默认使用 `quote.toml` 同目录下的 `data/`。
 
 | 键 | 类型 | 默认值 | 必填 | 说明 |
 |---|---|---|---|---|
-| `root` | string | 无 | 否 | 文件存储根目录 |
+| `root` | string | `<config_dir>/data` | 否 | 文件存储根目录；支持 `~/` 展开；相对路径按 `quote.toml` 所在目录解析 |
 
 ## 3.3 `[cli.format]`
 
@@ -128,11 +128,11 @@ full = "{{}}"
 - `database.backend = "postgres"` 时必须提供 `[database.postgres]`
 - `database.backend = "mysql"` 时必须提供 `[database.mysql]`（但当前仍未实现）
 - `storage.backend = "minio"` 时必须提供 `[storage.minio]`
-- `storage.backend = "file"` 时必须提供 `[storage.file]`（但当前仍未实现）
+- `storage.backend = "file"` 时可省略 `[storage.file]`
 
 ## 5. 场景示例
 
-### 5.1 空配置（默认 sqlite + none）
+### 5.1 空配置（默认 sqlite + file）
 
 ```toml
 # empty
@@ -148,7 +148,7 @@ backend = "sqlite"
 path = "~/.config/azvs/quote.db"
 
 [storage]
-backend = "none"
+backend = "file"
 ```
 
 ### 5.3 postgres + none

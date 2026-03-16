@@ -74,7 +74,10 @@ fn extract_single_image_target(raw_template: &str) -> Option<ImageTemplateTarget
     if parts.next().is_some() {
         return None;
     }
-    index_raw.parse::<usize>().ok().map(ImageTemplateTarget::Index)
+    index_raw
+        .parse::<usize>()
+        .ok()
+        .map(ImageTemplateTarget::Index)
 }
 
 /// 在 `view` 模式下尝试直接向终端输出图片。
@@ -100,7 +103,10 @@ async fn try_print_image_view(
     let mut printed = false;
     match target {
         ImageTemplateTarget::Index(index) => {
-            let Some(bytes) = render_template_service.load_image_bytes(quote, index).await? else {
+            let Some(bytes) = render_template_service
+                .load_image_bytes(quote, index)
+                .await?
+            else {
                 return Ok(false);
             };
             let Ok(img) = image::load_from_memory(&bytes) else {

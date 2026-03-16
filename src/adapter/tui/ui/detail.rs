@@ -98,7 +98,10 @@ fn build_detail_full_text(quote: &Quote) -> Text<'static> {
     }
 
     lines.push(Line::from(""));
-    lines.push(Line::from(format!("external ({}):", quote.external().len())));
+    lines.push(Line::from(format!(
+        "external ({}):",
+        quote.external().len()
+    )));
     let mut external_items: Vec<_> = quote
         .external()
         .iter()
@@ -114,7 +117,10 @@ fn build_detail_full_text(quote: &Quote) -> Text<'static> {
     }
 
     lines.push(Line::from(""));
-    lines.push(Line::from(format!("markdown ({}):", quote.markdown().len())));
+    lines.push(Line::from(format!(
+        "markdown ({}):",
+        quote.markdown().len()
+    )));
     let mut markdown_items: Vec<_> = quote
         .markdown()
         .iter()

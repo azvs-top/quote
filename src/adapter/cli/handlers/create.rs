@@ -1,11 +1,14 @@
 use crate::adapter::cli::CreateArgs;
+use crate::application::ApplicationState;
 use crate::application::service::quote::{CreateQuoteService, QuoteCreateDraft};
 use crate::application::storage::StoragePayload;
-use crate::application::ApplicationState;
 use crate::domain::value::Lang;
 use std::path::PathBuf;
 
-pub(super) async fn handle_create(state: &ApplicationState, args: CreateArgs) -> anyhow::Result<()> {
+pub(super) async fn handle_create(
+    state: &ApplicationState,
+    args: CreateArgs,
+) -> anyhow::Result<()> {
     let mut draft = QuoteCreateDraft::default();
     draft.remark = args.remark;
 

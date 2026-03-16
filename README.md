@@ -37,7 +37,8 @@ cargo build --release
 - 数据库 backend 默认是 `sqlite`
 - 数据库文件默认是 `~/.config/azvs/quote.db`
 - 不会自动初始化数据库；需手动创建库和表
-- 存储 backend 默认是 `none`（不依赖 MinIO）
+- 存储 backend 默认是 `file`
+- 文件存储根目录默认是 `quote.toml` 同目录下的 `data/`
 
 ## 配置
 

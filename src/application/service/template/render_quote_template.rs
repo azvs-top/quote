@@ -1,10 +1,10 @@
 use super::NormalizeTemplateService;
-use crate::application::storage::StoragePort;
 use crate::application::ApplicationError;
+use crate::application::storage::StoragePort;
 use crate::domain::entity::Quote;
 use crate::domain::value::Lang;
-use image::imageops::FilterType;
 use image::GenericImageView;
+use image::imageops::FilterType;
 use serde_json::Value;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -27,8 +27,14 @@ pub struct RenderQuoteTemplateService<'a> {
 
 impl<'a> RenderQuoteTemplateService<'a> {
     /// 创建渲染服务，注入对象存储访问能力。
-    pub fn new(storage: &'a (dyn StoragePort + Send + Sync), image_mode: TemplateImageMode) -> Self {
-        Self { storage, image_mode }
+    pub fn new(
+        storage: &'a (dyn StoragePort + Send + Sync),
+        image_mode: TemplateImageMode,
+    ) -> Self {
+        Self {
+            storage,
+            image_mode,
+        }
     }
 
     /// 仅加载指定索引的图片原始字节（不做格式化输出）。
@@ -338,8 +344,8 @@ fn pad_left_min_width(value: &str, width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::{RenderQuoteTemplateService, TemplateImageMode};
-    use crate::application::storage::MockStoragePort;
     use crate::application::ApplicationError;
+    use crate::application::storage::MockStoragePort;
     use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
     use crate::domain::value::{Lang, ObjectKey};
     use std::collections::HashMap;
@@ -358,8 +364,8 @@ mod tests {
     fn tiny_png_bytes() -> Vec<u8> {
         vec![
             137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
-            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 15,
-            4, 0, 9, 251, 3, 253, 160, 43, 77, 132, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 15, 4,
+            0, 9, 251, 3, 253, 160, 43, 77, 132, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
         ]
     }
 
