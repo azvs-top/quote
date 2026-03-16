@@ -16,6 +16,7 @@ git push github master
 ```
 
 ```bash
+# git remote add upstream https://github.com/azvs32/quote
 # 拉取上游仓库所有最新改动
 git fetch upstream
 # 切换到你本地的主分支
