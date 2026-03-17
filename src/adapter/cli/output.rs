@@ -4,7 +4,7 @@ use std::io::IsTerminal;
 use viuer::{Config as ViuerConfig, print as print_image};
 
 pub(super) async fn print_quote(
-    quote: &crate::domain::entity::Quote,
+    quote: &crate::domain::quote::Quote,
     format: Option<&str>,
     render_template_service: &RenderQuoteTemplateService<'_>,
     image_mode: CliImageMode,
@@ -26,7 +26,7 @@ pub(super) async fn print_quote(
 }
 
 pub(super) async fn print_quotes(
-    quotes: &[crate::domain::entity::Quote],
+    quotes: &[crate::domain::quote::Quote],
     format: Option<&str>,
     render_template_service: &RenderQuoteTemplateService<'_>,
     image_mode: CliImageMode,
@@ -88,7 +88,7 @@ fn extract_single_image_target(raw_template: &str) -> Option<ImageTemplateTarget
 /// - 终端直出失败时返回 `Ok(false)`，由上层回退到文本渲染。
 async fn try_print_image_view(
     render_template_service: &RenderQuoteTemplateService<'_>,
-    quote: &crate::domain::entity::Quote,
+    quote: &crate::domain::quote::Quote,
     target: ImageTemplateTarget,
 ) -> anyhow::Result<bool> {
     if !std::io::stdout().is_terminal() {

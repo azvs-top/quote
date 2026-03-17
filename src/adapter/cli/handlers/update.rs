@@ -24,7 +24,7 @@ pub(super) async fn handle_update(
         anyhow::bail!("--inline expects pairs: LANG TEXT");
     }
     if !args.inline.is_empty() {
-        let mut inline = crate::domain::entity::MultiLangText::new();
+        let mut inline = crate::domain::quote::MultiLangText::new();
         for chunk in args.inline.chunks(2) {
             let lang = Lang::new(chunk[0].clone())?;
             if inline.insert(lang, chunk[1].clone()).is_some() {

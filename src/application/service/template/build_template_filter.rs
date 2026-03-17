@@ -1,7 +1,6 @@
 use super::NormalizeTemplateService;
 use crate::application::ApplicationError;
-use crate::application::quote::QuoteFilter;
-use crate::domain::value::Lang;
+use crate::domain::{value::Lang, QuoteFilter};
 use std::collections::HashSet;
 
 /// 从模板表达式推导随机查询过滤条件。

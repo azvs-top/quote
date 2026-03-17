@@ -63,7 +63,7 @@ fn parse_download_target(
 }
 
 fn resolve_download_key<'a>(
-    quote: &'a crate::domain::entity::Quote,
+    quote: &'a crate::domain::quote::Quote,
     target: &DownloadTarget,
 ) -> anyhow::Result<&'a ObjectKey> {
     match target {
@@ -85,7 +85,7 @@ fn resolve_download_key<'a>(
 #[cfg(test)]
 mod tests {
     use super::{DownloadTarget, parse_download_target, resolve_download_key};
-    use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
+    use crate::domain::quote::{MultiLangObject, MultiLangText, Quote};
     use crate::domain::value::{Lang, ObjectKey};
 
     fn build_test_quote() -> Quote {

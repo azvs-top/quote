@@ -1,6 +1,6 @@
 use crate::application::ApplicationError;
-use crate::application::quote::{QuoteCreate, QuoteFilter, QuotePort, QuoteQuery, QuoteUpdate};
-use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
+use crate::application::quote::{QuotePort, QuoteQuery};
+use crate::domain::quote::{MultiLangObject, MultiLangText, Quote, QuoteDraft, QuotePatch, QuoteFilter};
 use crate::domain::value::ObjectKey;
 use async_trait::async_trait;
 use serde_json::Value;
@@ -48,7 +48,7 @@ impl PostgresQuoteRepo {
     }
 
     /// 将领域/应用结构序列化为 JSON 值，供 JSONB 字段写入。
-    fn serialize_json_value<T: serde::Serialize>(
+    fn serialize_json_value<T: serde::Serialize + ?Sized>(
         value: &T,
         field: &str,
     ) -> Result<Value, ApplicationError> {
@@ -75,20 +75,6 @@ impl PostgresQuoteRepo {
 
         Quote::new(row.id, inline, external, markdown, image, row.remark)
             .map_err(ApplicationError::from)
-    }
-
-    /// 判断过滤器是否为空条件（无约束）。
-    fn is_empty_filter(filter: &QuoteFilter) -> bool {
-        filter.all_of.is_empty()
-            && filter.any_of.is_empty()
-            && filter.not.is_none()
-            && filter.inline_all.is_empty()
-            && filter.inline_any.is_empty()
-            && filter.external_all.is_empty()
-            && filter.external_any.is_empty()
-            && filter.markdown_all.is_empty()
-            && filter.markdown_any.is_empty()
-            && filter.image_exists.is_none()
     }
 
     /// 追加“语言全集匹配”条件：同一列必须同时包含所有语言 key。
@@ -132,7 +118,7 @@ impl PostgresQuoteRepo {
         qb: &mut QueryBuilder<'_, Postgres>,
         filter: &QuoteFilter,
     ) -> Result<(), ApplicationError> {
-        if Self::is_empty_filter(filter) {
+        if filter.is_empty() {
             qb.push("TRUE");
             return Ok(());
         }
@@ -257,11 +243,11 @@ struct QuoteRow {
 
 #[async_trait]
 impl QuotePort for PostgresQuoteRepo {
-    async fn create(&self, create: QuoteCreate) -> Result<Quote, ApplicationError> {
-        let inline = Self::serialize_json_value(&create.inline, "inline")?;
-        let external = Self::serialize_json_value(&create.external, "external")?;
-        let markdown = Self::serialize_json_value(&create.markdown, "markdown")?;
-        let image = Self::serialize_json_value(&create.image, "image")?;
+    async fn create(&self, draft: QuoteDraft) -> Result<Quote, ApplicationError> {
+        let inline = Self::serialize_json_value(draft.inline(), "inline")?;
+        let external = Self::serialize_json_value(draft.external(), "external")?;
+        let markdown = Self::serialize_json_value(draft.markdown(), "markdown")?;
+        let image = Self::serialize_json_value(draft.image(), "image")?;
         let row = sqlx::query_as::<_, QuoteRow>(
             r#"
             INSERT INTO quote.quote (inline, external, markdown, image, remark)
@@ -273,7 +259,7 @@ impl QuotePort for PostgresQuoteRepo {
         .bind(external)
         .bind(markdown)
         .bind(image)
-        .bind(create.remark)
+        .bind(draft.remark())
         .fetch_one(&self.pool)
         .await
         .map_err(|err| Self::map_sqlx_error(err, "insert quote"))?;
@@ -293,7 +279,7 @@ impl QuotePort for PostgresQuoteRepo {
             qb.push_bind(id);
             qb.push(" LIMIT 1");
         } else {
-            if !Self::is_empty_filter(query.filter()) {
+            if !query.filter().is_empty() {
                 qb.push(" AND (");
                 Self::push_filter_expr(&mut qb, query.filter())?;
                 qb.push(")");
@@ -321,7 +307,7 @@ impl QuotePort for PostgresQuoteRepo {
             qb.push_bind(id);
         }
 
-        if !Self::is_empty_filter(query.filter()) {
+        if !query.filter().is_empty() {
             qb.push(" AND (");
             Self::push_filter_expr(&mut qb, query.filter())?;
             qb.push(")");
@@ -355,7 +341,7 @@ impl QuotePort for PostgresQuoteRepo {
             qb.push_bind(id);
         }
 
-        if !Self::is_empty_filter(query.filter()) {
+        if !query.filter().is_empty() {
             qb.push(" AND (");
             Self::push_filter_expr(&mut qb, query.filter())?;
             qb.push(")");
@@ -367,63 +353,29 @@ impl QuotePort for PostgresQuoteRepo {
             .map_err(|err| Self::map_sqlx_error(err, "count quote"))
     }
 
-    async fn update(&self, update: QuoteUpdate) -> Result<Quote, ApplicationError> {
-        let mut qb = QueryBuilder::<Postgres>::new("UPDATE quote.quote SET ");
-        let mut has_set = false;
-
-        if let Some(inline) = update.inline {
-            if has_set {
-                qb.push(", ");
-            }
-            qb.push("inline = ");
-            qb.push_bind(Self::serialize_json_value(&inline, "inline")?);
-            has_set = true;
-        }
-
-        if let Some(external) = update.external {
-            if has_set {
-                qb.push(", ");
-            }
-            qb.push("external = ");
-            qb.push_bind(Self::serialize_json_value(&external, "external")?);
-            has_set = true;
-        }
-
-        if let Some(markdown) = update.markdown {
-            if has_set {
-                qb.push(", ");
-            }
-            qb.push("markdown = ");
-            qb.push_bind(Self::serialize_json_value(&markdown, "markdown")?);
-            has_set = true;
-        }
-
-        if let Some(image) = update.image {
-            if has_set {
-                qb.push(", ");
-            }
-            qb.push("image = ");
-            qb.push_bind(Self::serialize_json_value(&image, "image")?);
-            has_set = true;
-        }
-
-        if let Some(remark) = update.remark {
-            if has_set {
-                qb.push(", ");
-            }
-            qb.push("remark = ");
-            qb.push_bind(remark);
-            has_set = true;
-        }
-
-        if !has_set {
+    async fn update(&self, id: i64, patch: QuotePatch) -> Result<Quote, ApplicationError> {
+        if patch.is_empty() {
             return Err(ApplicationError::InvalidInput(
                 "no fields to update".to_string(),
             ));
         }
 
+        let current = self.get(QuoteQuery::builder().id(id).build()).await?;
+        let next = current.apply(patch).map_err(ApplicationError::from)?;
+
+        let mut qb = QueryBuilder::<Postgres>::new("UPDATE quote.quote SET ");
+        qb.push("inline = ");
+        qb.push_bind(Self::serialize_json_value(next.inline(), "inline")?);
+        qb.push(", external = ");
+        qb.push_bind(Self::serialize_json_value(next.external(), "external")?);
+        qb.push(", markdown = ");
+        qb.push_bind(Self::serialize_json_value(next.markdown(), "markdown")?);
+        qb.push(", image = ");
+        qb.push_bind(Self::serialize_json_value(next.image(), "image")?);
+        qb.push(", remark = ");
+        qb.push_bind(next.remark());
         qb.push(" WHERE id = ");
-        qb.push_bind(update.id);
+        qb.push_bind(id);
         qb.push(" RETURNING id, inline, external, markdown, image, remark");
 
         let row = qb

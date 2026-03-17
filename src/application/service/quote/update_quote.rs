@@ -1,11 +1,11 @@
 use super::create_quote::{UploadKind, detect_content_type};
 use crate::application::ApplicationError;
-use crate::application::quote::{QuotePort, QuoteQuery, QuoteUpdate};
+use crate::application::quote::{QuotePort, QuoteQuery};
 use crate::application::service::storage::{
     DeleteManyService, UploadManyWithRollbackService, UploadObjectItem,
 };
 use crate::application::storage::StoragePayload;
-use crate::domain::entity::{MultiLangText, Quote};
+use crate::domain::quote::{MultiLangText, Quote, QuotePatch};
 use crate::domain::value::{Lang, ObjectKey};
 use std::collections::{HashMap, HashSet};
 
@@ -60,25 +60,17 @@ impl<'a> UpdateQuoteService<'a> {
                 "no fields to update".to_string(),
             ));
         }
-        validate_inline_update_draft(&draft)?;
-
         let previous = self
             .quote_port
             .get(QuoteQuery::builder().id(draft.id).build())
             .await?;
 
-        if !has_content_after_update(&previous, &draft) {
-            return Err(ApplicationError::InvalidInput(
-                "quote content is missing after update".to_string(),
-            ));
-        }
-
         let mut plan = UpdateUploadPlan::from_update_draft(&draft)?;
         let items = std::mem::take(&mut plan.items);
         let uploaded = self.upload_service.execute(items).await?;
-        let update = plan.to_update(&draft, &previous, &uploaded)?;
+        let patch = plan.to_patch(&draft, &uploaded)?;
 
-        let updated = match self.quote_port.update(update).await {
+        let updated = match self.quote_port.update(draft.id, patch).await {
             Ok(quote) => quote,
             Err(err) => {
                 let rollback_err = self.delete_service.execute(&uploaded).await.err();
@@ -104,52 +96,6 @@ impl<'a> UpdateQuoteService<'a> {
 
         Ok(updated)
     }
-}
-
-fn has_content_after_update(previous: &Quote, draft: &QuoteUpdateDraft) -> bool {
-    let inline_non_empty = draft
-        .inline
-        .as_ref()
-        .map(|v| v.values().any(|text| !text.trim().is_empty()))
-        .unwrap_or_else(|| {
-            previous
-                .inline()
-                .values()
-                .any(|text| !text.trim().is_empty())
-        });
-
-    let external_non_empty = draft
-        .external
-        .as_ref()
-        .map(|v| !v.is_empty())
-        .unwrap_or(!previous.external().is_empty());
-
-    let markdown_non_empty = draft
-        .markdown
-        .as_ref()
-        .map(|v| !v.is_empty())
-        .unwrap_or(!previous.markdown().is_empty());
-
-    let image_non_empty = draft
-        .image
-        .as_ref()
-        .map(|v| !v.is_empty())
-        .unwrap_or(!previous.image().is_empty());
-
-    inline_non_empty || external_non_empty || markdown_non_empty || image_non_empty
-}
-
-fn validate_inline_update_draft(draft: &QuoteUpdateDraft) -> Result<(), ApplicationError> {
-    if let Some(inline) = &draft.inline {
-        for text in inline.values() {
-            if text.trim().is_empty() {
-                return Err(ApplicationError::InvalidInput(
-                    "inline text must not be blank".to_string(),
-                ));
-            }
-        }
-    }
-    Ok(())
 }
 
 #[derive(Debug)]
@@ -226,12 +172,11 @@ impl UpdateUploadPlan {
         })
     }
 
-    fn to_update(
+    fn to_patch(
         &self,
         draft: &QuoteUpdateDraft,
-        previous: &Quote,
         uploaded: &[ObjectKey],
-    ) -> Result<QuoteUpdate, ApplicationError> {
+    ) -> Result<QuotePatch, ApplicationError> {
         let expected = self.external_langs.len() + self.markdown_langs.len() + self.image_count;
         if uploaded.len() != expected {
             return Err(ApplicationError::Dependency(format!(
@@ -243,7 +188,7 @@ impl UpdateUploadPlan {
         let mut idx = 0usize;
 
         let external = if self.replace_external {
-            let mut map = previous.external().clone();
+            let mut map = HashMap::new();
             for lang in &self.external_langs {
                 map.insert(lang.clone(), uploaded[idx].clone());
                 idx += 1;
@@ -254,7 +199,7 @@ impl UpdateUploadPlan {
         };
 
         let markdown = if self.replace_markdown {
-            let mut map = previous.markdown().clone();
+            let mut map = HashMap::new();
             for lang in &self.markdown_langs {
                 map.insert(lang.clone(), uploaded[idx].clone());
                 idx += 1;
@@ -265,31 +210,27 @@ impl UpdateUploadPlan {
         };
 
         let image = if self.replace_image {
-            let mut merged = previous.image().to_vec();
-            merged.extend_from_slice(&uploaded[idx..]);
-            Some(merged)
+            Some(uploaded[idx..].to_vec())
         } else {
             None
         };
 
-        let inline = if let Some(inline_patch) = &draft.inline {
-            let mut merged = previous.inline().clone();
-            for (lang, text) in inline_patch {
-                merged.insert(lang.clone(), text.clone());
-            }
-            Some(merged)
-        } else {
-            None
-        };
-
-        Ok(QuoteUpdate {
-            id: draft.id,
-            inline,
+        QuotePatch::new(
+            draft.inline.clone(),
+            false,
+            Vec::new(),
             external,
+            false,
+            Vec::new(),
             markdown,
+            false,
+            Vec::new(),
             image,
-            remark: draft.remark.clone(),
-        })
+            false,
+            Vec::new(),
+            draft.remark.clone(),
+        )
+            .map_err(ApplicationError::from)
     }
 
     fn keys_to_cleanup(&self, previous: &Quote, updated: &Quote) -> Vec<ObjectKey> {

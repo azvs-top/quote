@@ -1,6 +1,6 @@
 use crate::application::ApplicationError;
 use crate::application::quote::{QuotePort, QuoteQuery};
-use crate::domain::entity::Quote;
+use crate::domain::quote::Quote;
 
 /// 分页查询 Quote 列表的服务。
 ///

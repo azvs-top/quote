@@ -43,7 +43,7 @@ pub(crate) fn render(frame: &mut ratatui::Frame<'_>, area: Rect, state: &TuiStat
 }
 
 fn build_row_text(
-    quote: &crate::domain::entity::Quote,
+    quote: &crate::domain::quote::Quote,
     row_budget: usize,
     id_width: usize,
 ) -> String {

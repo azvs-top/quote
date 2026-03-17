@@ -1,4 +1,4 @@
-use crate::domain::entity::Quote;
+use crate::domain::quote::Quote;
 
 const READY_HINT: &str = "ready: j/k move, n/p page, l enter, g goto, :help commands";
 const HELP_HINT: &str = "help page opened";

@@ -1,5 +1,5 @@
 use crate::adapter::tui::state::TuiState;
-use crate::domain::entity::Quote;
+use crate::domain::quote::Quote;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};

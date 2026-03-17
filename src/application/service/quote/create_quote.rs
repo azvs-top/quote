@@ -1,10 +1,10 @@
 use crate::application::ApplicationError;
-use crate::application::quote::{QuoteCreate, QuotePort};
+use crate::application::quote::QuotePort;
 use crate::application::service::storage::{
     DeleteManyService, UploadManyWithRollbackService, UploadObjectItem,
 };
 use crate::application::storage::StoragePayload;
-use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
+use crate::domain::quote::{MultiLangObject, MultiLangText, Quote, QuoteDraft};
 use crate::domain::value::{Lang, ObjectKey};
 use std::collections::HashMap;
 
@@ -135,7 +135,7 @@ impl UploadPlan {
         })
     }
 
-    fn to_create(&self, uploaded: &[ObjectKey]) -> Result<QuoteCreate, ApplicationError> {
+    fn to_create(&self, uploaded: &[ObjectKey]) -> Result<QuoteDraft, ApplicationError> {
         let expected = self.external_langs.len() + self.markdown_langs.len() + self.image_count;
         if uploaded.len() != expected {
             return Err(ApplicationError::Dependency(format!(
@@ -159,13 +159,14 @@ impl UploadPlan {
 
         let image = uploaded[idx..].to_vec();
 
-        Ok(QuoteCreate {
-            inline: self.inline.clone(),
+        QuoteDraft::new(
+            self.inline.clone(),
             external,
             markdown,
             image,
-            remark: self.remark.clone(),
-        })
+            self.remark.clone(),
+        )
+        .map_err(ApplicationError::from)
     }
 }
 

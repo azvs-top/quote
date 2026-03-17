@@ -1,6 +1,6 @@
 use crate::application::ApplicationError;
-use crate::application::quote::{QuoteCreate, QuoteFilter, QuotePort, QuoteQuery, QuoteUpdate};
-use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
+use crate::application::quote::{QuotePort, QuoteQuery};
+use crate::domain::quote::{MultiLangObject, MultiLangText, Quote, QuoteDraft, QuotePatch, QuoteFilter};
 use crate::domain::value::ObjectKey;
 use async_trait::async_trait;
 use sqlx::{FromRow, QueryBuilder, Sqlite, SqlitePool};
@@ -61,7 +61,7 @@ impl SqliteQuoteRepo {
         }
     }
 
-    fn serialize_json_text<T: serde::Serialize>(
+    fn serialize_json_text<T: serde::Serialize + ?Sized>(
         value: &T,
         field: &str,
     ) -> Result<String, ApplicationError> {
@@ -86,19 +86,6 @@ impl SqliteQuoteRepo {
 
         Quote::new(row.id, inline, external, markdown, image, row.remark)
             .map_err(ApplicationError::from)
-    }
-
-    fn is_empty_filter(filter: &QuoteFilter) -> bool {
-        filter.all_of.is_empty()
-            && filter.any_of.is_empty()
-            && filter.not.is_none()
-            && filter.inline_all.is_empty()
-            && filter.inline_any.is_empty()
-            && filter.external_all.is_empty()
-            && filter.external_any.is_empty()
-            && filter.markdown_all.is_empty()
-            && filter.markdown_any.is_empty()
-            && filter.image_exists.is_none()
     }
 
     fn push_lang_all(
@@ -149,7 +136,7 @@ impl SqliteQuoteRepo {
         qb: &mut QueryBuilder<'_, Sqlite>,
         filter: &QuoteFilter,
     ) -> Result<(), ApplicationError> {
-        if Self::is_empty_filter(filter) {
+        if filter.is_empty() {
             qb.push("TRUE");
             return Ok(());
         }
@@ -294,11 +281,11 @@ struct QuoteRow {
 
 #[async_trait]
 impl QuotePort for SqliteQuoteRepo {
-    async fn create(&self, create: QuoteCreate) -> Result<Quote, ApplicationError> {
-        let inline = Self::serialize_json_text(&create.inline, "inline")?;
-        let external = Self::serialize_json_text(&create.external, "external")?;
-        let markdown = Self::serialize_json_text(&create.markdown, "markdown")?;
-        let image = Self::serialize_json_text(&create.image, "image")?;
+    async fn create(&self, draft: QuoteDraft) -> Result<Quote, ApplicationError> {
+        let inline = Self::serialize_json_text(draft.inline(), "inline")?;
+        let external = Self::serialize_json_text(draft.external(), "external")?;
+        let markdown = Self::serialize_json_text(draft.markdown(), "markdown")?;
+        let image = Self::serialize_json_text(draft.image(), "image")?;
 
         let row = sqlx::query_as::<_, QuoteRow>(
             r#"
@@ -311,7 +298,7 @@ impl QuotePort for SqliteQuoteRepo {
         .bind(external)
         .bind(markdown)
         .bind(image)
-        .bind(create.remark)
+        .bind(draft.remark())
         .fetch_one(&self.pool)
         .await
         .map_err(|err| Self::map_sqlx_error(err, "insert quote"))?;
@@ -329,7 +316,7 @@ impl QuotePort for SqliteQuoteRepo {
             qb.push_bind(id);
             qb.push(" LIMIT 1");
         } else {
-            if !Self::is_empty_filter(query.filter()) {
+            if !query.filter().is_empty() {
                 qb.push(" AND (");
                 Self::push_filter_expr(&mut qb, query.filter())?;
                 qb.push(")");
@@ -357,7 +344,7 @@ impl QuotePort for SqliteQuoteRepo {
             qb.push_bind(id);
         }
 
-        if !Self::is_empty_filter(query.filter()) {
+        if !query.filter().is_empty() {
             qb.push(" AND (");
             Self::push_filter_expr(&mut qb, query.filter())?;
             qb.push(")");
@@ -391,7 +378,7 @@ impl QuotePort for SqliteQuoteRepo {
             qb.push_bind(id);
         }
 
-        if !Self::is_empty_filter(query.filter()) {
+        if !query.filter().is_empty() {
             qb.push(" AND (");
             Self::push_filter_expr(&mut qb, query.filter())?;
             qb.push(")");
@@ -403,63 +390,29 @@ impl QuotePort for SqliteQuoteRepo {
             .map_err(|err| Self::map_sqlx_error(err, "count quote"))
     }
 
-    async fn update(&self, update: QuoteUpdate) -> Result<Quote, ApplicationError> {
-        let mut qb = QueryBuilder::<Sqlite>::new("UPDATE quote SET ");
-        let mut has_set = false;
-
-        if let Some(inline) = update.inline {
-            if has_set {
-                qb.push(", ");
-            }
-            qb.push("inline = ");
-            qb.push_bind(Self::serialize_json_text(&inline, "inline")?);
-            has_set = true;
-        }
-
-        if let Some(external) = update.external {
-            if has_set {
-                qb.push(", ");
-            }
-            qb.push("external = ");
-            qb.push_bind(Self::serialize_json_text(&external, "external")?);
-            has_set = true;
-        }
-
-        if let Some(markdown) = update.markdown {
-            if has_set {
-                qb.push(", ");
-            }
-            qb.push("markdown = ");
-            qb.push_bind(Self::serialize_json_text(&markdown, "markdown")?);
-            has_set = true;
-        }
-
-        if let Some(image) = update.image {
-            if has_set {
-                qb.push(", ");
-            }
-            qb.push("image = ");
-            qb.push_bind(Self::serialize_json_text(&image, "image")?);
-            has_set = true;
-        }
-
-        if let Some(remark) = update.remark {
-            if has_set {
-                qb.push(", ");
-            }
-            qb.push("remark = ");
-            qb.push_bind(remark);
-            has_set = true;
-        }
-
-        if !has_set {
+    async fn update(&self, id: i64, patch: QuotePatch) -> Result<Quote, ApplicationError> {
+        if patch.is_empty() {
             return Err(ApplicationError::InvalidInput(
                 "no fields to update".to_string(),
             ));
         }
 
+        let current = self.get(QuoteQuery::builder().id(id).build()).await?;
+        let next = current.apply(patch).map_err(ApplicationError::from)?;
+
+        let mut qb = QueryBuilder::<Sqlite>::new("UPDATE quote SET ");
+        qb.push("inline = ");
+        qb.push_bind(Self::serialize_json_text(next.inline(), "inline")?);
+        qb.push(", external = ");
+        qb.push_bind(Self::serialize_json_text(next.external(), "external")?);
+        qb.push(", markdown = ");
+        qb.push_bind(Self::serialize_json_text(next.markdown(), "markdown")?);
+        qb.push(", image = ");
+        qb.push_bind(Self::serialize_json_text(next.image(), "image")?);
+        qb.push(", remark = ");
+        qb.push_bind(next.remark());
         qb.push(" WHERE id = ");
-        qb.push_bind(update.id);
+        qb.push_bind(id);
         qb.push(" RETURNING id, inline, external, markdown, image, remark");
 
         let row = qb

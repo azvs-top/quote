@@ -1,6 +1,6 @@
 use crate::application::ApplicationError;
-use crate::application::quote::{QuoteCreate, QuoteQuery, QuoteUpdate};
-use crate::domain::entity::Quote;
+use crate::application::quote::QuoteQuery;
+use crate::domain::quote::{Quote, QuoteDraft, QuotePatch};
 use async_trait::async_trait;
 
 #[cfg_attr(test, mockall::automock)]
@@ -19,7 +19,7 @@ pub trait QuotePort {
     /// # Errors
     /// - 参数不合法时返回 `ApplicationError::InvalidInput` 或 `ApplicationError::Domain(_)`。
     /// - 持久化失败时返回实现层映射后的依赖错误（如 `ApplicationError::Dependency`）。
-    async fn create(&self, create: QuoteCreate) -> Result<Quote, ApplicationError>;
+    async fn create(&self, create: QuoteDraft) -> Result<Quote, ApplicationError>;
 
     /// 查询单条 Quote。
     ///
@@ -85,7 +85,7 @@ pub trait QuotePort {
     /// # Errors
     /// - 记录不存在时返回 `ApplicationError::NotFound`（或领域等价错误）。
     /// - 更新失败时返回实现层映射后的错误。
-    async fn update(&self, update: QuoteUpdate) -> Result<Quote, ApplicationError>;
+    async fn update(&self, id: i64, patch: QuotePatch) -> Result<Quote, ApplicationError>;
 
     /// 按主键删除一条 Quote。
     ///

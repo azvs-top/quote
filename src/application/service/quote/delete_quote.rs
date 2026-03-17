@@ -61,7 +61,7 @@ impl<'a> DeleteQuoteService<'a> {
     }
 }
 
-fn collect_storage_keys(quote: &crate::domain::entity::Quote) -> Vec<ObjectKey> {
+fn collect_storage_keys(quote: &crate::domain::quote::Quote) -> Vec<ObjectKey> {
     // 某些对象 key 可能被多个字段复用，先去重后再删，避免重复调用底层 delete。
     let mut dedup = HashSet::new();
     let mut keys = Vec::new();

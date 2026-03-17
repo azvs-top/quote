@@ -1,8 +1,8 @@
 use crate::application::ApplicationError;
-use crate::application::quote::{QuotePort, QuoteQuery, QuoteUpdate};
+use crate::application::quote::{QuotePort, QuoteQuery};
 use crate::application::service::storage::DeleteManyService;
 use crate::application::storage::StoragePort;
-use crate::domain::entity::Quote;
+use crate::domain::quote::{Quote, QuotePatch};
 use crate::domain::value::{Lang, ObjectKey};
 use std::collections::HashSet;
 
@@ -54,82 +54,60 @@ impl<'a> PartialDeleteQuoteService<'a> {
             .await?;
 
         let mut removed_object_keys = Vec::new();
-        let mut update = QuoteUpdate {
-            id: draft.id,
-            ..Default::default()
+
+        if draft.clear_external {
+            removed_object_keys.extend(current.external().values().cloned());
+        } else {
+            for lang in &draft.external_langs {
+                if let Some(key) = current.external().get(lang) {
+                    removed_object_keys.push(key.clone());
+                }
+            }
+        }
+
+        if draft.clear_markdown {
+            removed_object_keys.extend(current.markdown().values().cloned());
+        } else {
+            for lang in &draft.markdown_langs {
+                if let Some(key) = current.markdown().get(lang) {
+                    removed_object_keys.push(key.clone());
+                }
+            }
+        }
+
+        let remove_image = if draft.clear_image {
+            current.image().to_vec()
+        } else {
+            let mut resolved = draft.image_keys.clone();
+            for index in &draft.image_indexes {
+                let Some(key) = current.image().get(*index) else {
+                    return Err(ApplicationError::InvalidInput(format!(
+                        "image index out of range: {index}"
+                    )));
+                };
+                resolved.push(key.clone());
+            }
+            resolved
         };
+        removed_object_keys.extend(remove_image.iter().cloned());
 
-        if draft.clear_inline || !draft.inline_langs.is_empty() {
-            let mut inline = current.inline().clone();
-            if draft.clear_inline {
-                inline.clear();
-            } else {
-                for lang in &draft.inline_langs {
-                    inline.remove(lang);
-                }
-            }
-            update.inline = Some(inline);
-        }
-
-        if draft.clear_external || !draft.external_langs.is_empty() {
-            let mut external = current.external().clone();
-            if draft.clear_external {
-                removed_object_keys.extend(external.values().cloned());
-                external.clear();
-            } else {
-                for lang in &draft.external_langs {
-                    if let Some(key) = external.remove(lang) {
-                        removed_object_keys.push(key);
-                    }
-                }
-            }
-            update.external = Some(external);
-        }
-
-        if draft.clear_markdown || !draft.markdown_langs.is_empty() {
-            let mut markdown = current.markdown().clone();
-            if draft.clear_markdown {
-                removed_object_keys.extend(markdown.values().cloned());
-                markdown.clear();
-            } else {
-                for lang in &draft.markdown_langs {
-                    if let Some(key) = markdown.remove(lang) {
-                        removed_object_keys.push(key);
-                    }
-                }
-            }
-            update.markdown = Some(markdown);
-        }
-
-        if draft.clear_image || !draft.image_keys.is_empty() || !draft.image_indexes.is_empty() {
-            let mut image = current.image().to_vec();
-            if draft.clear_image {
-                removed_object_keys.extend(image.iter().cloned());
-                image.clear();
-            } else {
-                let mut resolved_image_keys = draft.image_keys.clone();
-                for index in &draft.image_indexes {
-                    let Some(key) = current.image().get(*index) else {
-                        return Err(ApplicationError::InvalidInput(format!(
-                            "image index out of range: {index}"
-                        )));
-                    };
-                    resolved_image_keys.push(key.clone());
-                }
-                let remove_set: HashSet<&str> =
-                    resolved_image_keys.iter().map(|k| k.as_str()).collect();
-                image.retain(|k| {
-                    let should_remove = remove_set.contains(k.as_str());
-                    if should_remove {
-                        removed_object_keys.push(k.clone());
-                    }
-                    !should_remove
-                });
-            }
-            update.image = Some(image);
-        }
-
-        let updated = self.quote_port.update(update).await?;
+        let patch = QuotePatch::new(
+            None,
+            draft.clear_inline,
+            draft.inline_langs.clone(),
+            None,
+            draft.clear_external,
+            draft.external_langs.clone(),
+            None,
+            draft.clear_markdown,
+            draft.markdown_langs.clone(),
+            None,
+            draft.clear_image,
+            remove_image,
+            None,
+        )
+            .map_err(ApplicationError::from)?;
+        let updated = self.quote_port.update(draft.id, patch).await?;
 
         if removed_object_keys.is_empty() {
             return Ok(updated);

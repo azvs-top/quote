@@ -1,4 +1,4 @@
-use crate::domain::entity::Quote;
+use crate::domain::quote::Quote;
 
 pub(crate) fn preview_inline(quote: &Quote) -> String {
     if let Some((_, text)) = quote

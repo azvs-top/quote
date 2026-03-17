@@ -1,7 +1,7 @@
 use super::NormalizeTemplateService;
 use crate::application::ApplicationError;
 use crate::application::storage::StoragePort;
-use crate::domain::entity::Quote;
+use crate::domain::quote::Quote;
 use crate::domain::value::Lang;
 use image::GenericImageView;
 use image::imageops::FilterType;
@@ -346,7 +346,7 @@ mod tests {
     use super::{RenderQuoteTemplateService, TemplateImageMode};
     use crate::application::ApplicationError;
     use crate::application::storage::MockStoragePort;
-    use crate::domain::entity::{MultiLangObject, MultiLangText, Quote};
+    use crate::domain::quote::{MultiLangObject, MultiLangText, Quote};
     use crate::domain::value::{Lang, ObjectKey};
     use std::collections::HashMap;
 

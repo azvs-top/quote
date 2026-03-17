@@ -1,11 +1,11 @@
-pub mod file_storage;
+pub mod file;
 pub mod minio;
-pub mod none_storage;
+pub mod none;
 pub mod postgres;
 pub mod sqlite;
 
-pub use file_storage::*;
+pub use file::*;
 pub use minio::*;
-pub use none_storage::*;
+pub use none::*;
 pub use postgres::*;
 pub use sqlite::*;
